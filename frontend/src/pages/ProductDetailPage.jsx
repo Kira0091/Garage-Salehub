@@ -5,7 +5,6 @@ import { productsAPI } from "../services/api";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
-import { chatAPI } from "../services/api";
 
 export default function ProductDetailPage() {
   const { id } = useParams();
@@ -17,8 +16,6 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeImg, setActiveImg] = useState(0);
   const [qty, setQty] = useState(1);
-  const [chatMsg, setChatMsg] = useState("");
-  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     productsAPI.getOne(id)
@@ -30,19 +27,6 @@ export default function ProductDetailPage() {
   const handleAddToCart = () => {
     addToCart(product, qty);
     toast("Added to cart!", "success");
-  };
-
-  const handleSendMessage = async () => {
-    if (!user) return navigate("/login");
-    if (!chatMsg.trim()) return;
-    try {
-      await chatAPI.send({ receiver_id: product.seller.id, product_id: product.id, content: chatMsg });
-      toast("Message sent!", "success");
-      setChatMsg("");
-      setChatOpen(false);
-    } catch (e) {
-      toast(e.message, "error");
-    }
   };
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>;
@@ -142,30 +126,7 @@ export default function ProductDetailPage() {
               >
                 🛒 Add to Cart
               </button>
-              <button
-                className="btn btn-outline btn-lg"
-                onClick={() => { if (!user) navigate("/login"); else setChatOpen(!chatOpen); }}
-              >
-                💬 Ask Seller
-              </button>
             </div>
-
-            {chatOpen && (
-              <div style={styles.chatBox}>
-                <h4 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Ask about this item</h4>
-                <textarea
-                  className="input-field"
-                  rows={3}
-                  style={{ width: "100%", resize: "none" }}
-                  placeholder="Hi, is this item still available? Can we negotiate the price?"
-                  value={chatMsg}
-                  onChange={(e) => setChatMsg(e.target.value)}
-                />
-                <button className="btn btn-primary" style={{ marginTop: 8 }} onClick={handleSendMessage}>
-                  Send Message
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </div>

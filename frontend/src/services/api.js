@@ -70,14 +70,28 @@ export const ordersAPI = {
     fetch(`${BASE_URL}/orders/${id}/cancel`, { method: "POST", headers: getHeaders() }).then(handleResponse),
 };
 
-// Chat
+// Chat (seller <-> admin only)
 export const chatAPI = {
   send: (body) =>
     fetch(`${BASE_URL}/chat/`, { method: "POST", headers: getHeaders(), body: JSON.stringify(body) }).then(handleResponse),
+
+  sendWithFiles: (formData) =>
+    fetch(`${BASE_URL}/chat/`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      body: formData,
+    }).then(handleResponse),
+
   conversations: () =>
     fetch(`${BASE_URL}/chat/conversations`, { headers: getHeaders() }).then(handleResponse),
+
   messages: (partnerId) =>
     fetch(`${BASE_URL}/chat/${partnerId}`, { headers: getHeaders() }).then(handleResponse),
+
+  getAdminId: () =>
+    fetch(`${BASE_URL}/chat/admin-id`, { headers: getHeaders() }).then(handleResponse),
+
+  attachmentUrl: (filename) => `${BASE_URL}/chat/attachments/${filename}`,
 };
 
 // Admin
