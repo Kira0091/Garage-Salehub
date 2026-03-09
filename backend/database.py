@@ -137,6 +137,10 @@ class Message(db.Model):
     receiver_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=True)
     content = db.Column(db.Text, nullable=False)
+    # message_type: chat | item_submission | price_proposal | price_counter | price_accepted | price_rejected | photo_request
+    message_type = db.Column(db.String(30), default="chat")
+    proposed_price = db.Column(db.Float, nullable=True)
+    attachments = db.Column(db.Text, default="")  # comma-separated filenames (images/videos)
     is_read = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -145,9 +149,13 @@ class Message(db.Model):
             "id": self.id,
             "sender_id": self.sender_id,
             "sender_name": self.sender.name,
+            "sender_role": self.sender.role,
             "receiver_id": self.receiver_id,
             "product_id": self.product_id,
             "content": self.content,
+            "message_type": self.message_type,
+            "proposed_price": self.proposed_price,
+            "attachments": self.attachments.split(",") if self.attachments else [],
             "is_read": self.is_read,
             "created_at": self.created_at.isoformat(),
         }
