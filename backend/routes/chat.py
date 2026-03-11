@@ -60,7 +60,7 @@ def send_message():
                 f.save(os.path.join(current_app.config["UPLOAD_FOLDER"], fname))
                 attachments.append(fname)
 
-    # Handle item_submission type — create a pending Product draft
+    # Handle item_submission type â€” create a pending Product draft
     if msg_type == "item_submission":
         import json
         item_data = json.loads(data.get("item_data", "{}"))
@@ -79,9 +79,9 @@ def send_message():
         db.session.add(product)
         db.session.flush()
         product_id = product.id
-        content = content or f"📦 Item submitted for review: **{product.title}**"
+        content = content or f"New item submitted for review: {product.title}"
 
-    # price_accepted → lock negotiated price
+    # price_accepted â†’ lock negotiated price
     if msg_type == "price_accepted" and product_id:
         product = Product.query.get(int(product_id))
         if product and product.seller_id == user_id:
@@ -92,7 +92,7 @@ def send_message():
                 product.negotiated_price = last.proposed_price
                 db.session.flush()
 
-    # price_proposal → save proposed price on product
+    # price_proposal â†’ save proposed price on product
     if msg_type == "price_proposal" and proposed_price and product_id:
         product = Product.query.get(int(product_id))
         if product:
