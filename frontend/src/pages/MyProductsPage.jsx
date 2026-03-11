@@ -23,8 +23,36 @@ export default function MyProductsPage() {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
+  const loadProducts = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
+    try {
+      const data = await productsAPI.myProducts();
+      setProducts(data);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    productsAPI.myProducts().then(setProducts).finally(() => setLoading(false));
+    loadProducts(true);
+  }, []);
+
+  useEffect(() => {
+    const checkRefresh = () => {
+      const refreshAt = localStorage.getItem("my_products_refresh");
+      if (refreshAt) {
+        localStorage.removeItem("my_products_refresh");
+        loadProducts();
+      }
+    };
+
+    window.addEventListener("focus", checkRefresh);
+    document.addEventListener("visibilitychange", checkRefresh);
+    checkRefresh();
+    return () => {
+      window.removeEventListener("focus", checkRefresh);
+      document.removeEventListener("visibilitychange", checkRefresh);
+    };
   }, []);
 
   const handleDelete = async (id) => {

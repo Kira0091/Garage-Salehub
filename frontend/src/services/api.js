@@ -78,7 +78,9 @@ export const chatAPI = {
   sendWithFiles: (formData) =>
     fetch(`${BASE_URL}/chat/`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      headers: {
+        ...(localStorage.getItem("token") ? { Authorization: `Bearer ${localStorage.getItem("token")}` } : {}),
+      },
       body: formData,
     }).then(handleResponse),
 
@@ -109,3 +111,5 @@ export const adminAPI = {
   getAllOrders: () =>
     fetch(`${BASE_URL}/orders/`, { headers: getHeaders() }).then(handleResponse),
 };
+
+

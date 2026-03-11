@@ -1,12 +1,15 @@
 // src/pages/AdminPage.jsx
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { adminAPI, ordersAPI, productsAPI } from "../services/api";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../context/AuthContext";
 
 const TABS = ["Dashboard", "Pending Items", "All Products", "Orders", "Users"];
 
 export default function AdminPage() {
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [tab, setTab] = useState("Dashboard");
   const [dashboard, setDashboard] = useState(null);
   const [pendingProducts, setPendingProducts] = useState([]);
@@ -18,6 +21,10 @@ export default function AdminPage() {
   const [rejectModal, setRejectModal] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const toast = useToast();
+  const admin = String(user?.role || "").trim().toLowerCase() === "admin";
+
+  if (authLoading) return <div className="loading-center"><div className="spinner" /></div>;
+  if (!admin) return <Navigate to="/" replace />;
 
   useEffect(() => {
     Promise.all([
@@ -69,6 +76,12 @@ export default function AdminPage() {
     } catch (e) {
       toast(e.message, "error");
     }
+  };
+
+  const openMessage = (partner) => {
+    if (!partner?.id) return;
+    const name = encodeURIComponent(partner.name || "User");
+    navigate(`/chat?partner=${partner.id}&name=${name}&role=user`);
   };
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>;
@@ -156,7 +169,6 @@ export default function AdminPage() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {pendingProducts.map((p) => {
-                  const img = p.images?.[0] ? productsAPI.imageUrl(p.images[0]) : null;
                   return (
                     <div key={p.id} className="card" style={styles.pendingCard}>
                       <div style={styles.pendingImgs}>
@@ -173,6 +185,15 @@ export default function AdminPage() {
                           <span><strong>Qty:</strong> {p.quantity}</span>
                           <span><strong>Seller:</strong> {p.seller.name}</span>
                           {p.category && <span><strong>Category:</strong> {p.category.name}</span>}
+                        </div>
+                        <div style={styles.pendingCommRow}>
+                          <button
+                            className="btn"
+                            style={styles.messageSellerBtn}
+                            onClick={() => openMessage(p.seller)}
+                          >
+                            Message Seller
+                          </button>
                         </div>
                       </div>
                       <div style={styles.pendingActions}>
@@ -243,7 +264,7 @@ export default function AdminPage() {
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Name</th><th>Email</th><th>Role</th><th>Items Submitted</th><th>Joined</th></tr>
+                  <tr><th>Name</th><th>Email</th><th>Role</th><th>Items Submitted</th><th>Joined</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                   {users.map((u) => (
@@ -253,6 +274,17 @@ export default function AdminPage() {
                       <td><span className={`badge ${u.role === "admin" ? "badge-red" : "badge-blue"}`}>{u.role}</span></td>
                       <td>{u.product_count}</td>
                       <td style={{ fontSize: 12 }}>{new Date(u.created_at).toLocaleDateString("en-PH")}</td>
+                      <td>
+                        {u.role !== "admin" && (
+                          <button
+                            className="btn btn-sm"
+                            style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}
+                            onClick={() => openMessage(u)}
+                          >
+                            Message
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -327,5 +359,15 @@ const styles = {
   pendingImgs: { display: "flex", gap: 6, flexShrink: 0 },
   pendingImg: { width: 80, height: 80, objectFit: "cover", borderRadius: 8 },
   pendingInfo: { flex: 1 },
+  pendingCommRow: { marginTop: 14, display: "flex", alignItems: "center" },
+  messageSellerBtn: {
+    background: "#1d4ed8",
+    color: "#fff",
+    border: "1px solid #1d4ed8",
+    fontWeight: 700,
+    padding: "9px 14px",
+    borderRadius: 8,
+    cursor: "pointer",
+  },
   pendingActions: { display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 },
 };
