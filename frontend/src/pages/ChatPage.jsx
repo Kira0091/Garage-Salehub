@@ -14,7 +14,7 @@ const TYPE_CONFIG = {
   price_counter:   { label: "Counter Offer",   color: { bg: "#faf5ff", border: "#e9d5ff", text: "#7c3aed" } },
   price_accepted:  { label: "Price Accepted",  color: { bg: "#f0fdf4", border: "#bbf7d0", text: "#15803d" } },
   price_rejected:  { label: "Offer Declined",  color: { bg: "#fff1f2", border: "#fecdd3", text: "#be123c" } },
-  photo_request:   { label: "Photo Request",   color: { bg: "#f0fdf4", border: "#bbf7d0", text: "#15803d" } },
+  photo_request:   { label: "Photo / Video Request", color: { bg: "#f0fdf4", border: "#bbf7d0", text: "#15803d" } },
 };
 const ITEM_TEMPLATE = `ITEM DETAILS
 
@@ -190,31 +190,29 @@ export default function ChatPage() {
   const handleSend = async (overrideType, overrideContent, extraPayload = {}) => {
     const msgType = overrideType || "chat";
     const content = overrideContent !== undefined ? overrideContent : text;
-    if (!content.trim() && attachedFiles.length === 0 && msgType === "chat") return;
+    if (!content.trim() && attachedFiles.length === 0) return;
 
     setSending(true);
     try {
-      if (attachedFiles.length > 0 || msgType === "chat") {
-        if (attachedFiles.length > 0) {
-          const fd = new FormData();
-          fd.append("content", content);
-          fd.append("message_type", msgType);
-          if (linkedProductId) fd.append("product_id", linkedProductId);
-          if (user.role === "admin" && selectedPartner) fd.append("receiver_id", selectedPartner.id);
-          attachedFiles.forEach((f) => fd.append("files", f));
-          Object.entries(extraPayload).forEach(([k, v]) => fd.append(k, v));
-          const msg = await chatAPI.sendWithFiles(fd);
-          setMessages((prev) => [...prev, msg]);
-        } else {
-          const payload = {
-            content, message_type: msgType,
-            ...(linkedProductId ? { product_id: parseInt(linkedProductId) } : {}),
-            ...(user.role === "admin" && selectedPartner ? { receiver_id: selectedPartner.id } : {}),
-            ...extraPayload,
-          };
-          const msg = await chatAPI.send(payload);
-          setMessages((prev) => [...prev, msg]);
-        }
+      if (attachedFiles.length > 0) {
+        const fd = new FormData();
+        fd.append("content", content);
+        fd.append("message_type", msgType);
+        if (linkedProductId) fd.append("product_id", linkedProductId);
+        if (user.role === "admin" && selectedPartner) fd.append("receiver_id", selectedPartner.id);
+        attachedFiles.forEach((f) => fd.append("files", f));
+        Object.entries(extraPayload).forEach(([k, v]) => fd.append(k, v));
+        const msg = await chatAPI.sendWithFiles(fd);
+        setMessages((prev) => [...prev, msg]);
+      } else {
+        const payload = {
+          content, message_type: msgType,
+          ...(linkedProductId ? { product_id: parseInt(linkedProductId) } : {}),
+          ...(user.role === "admin" && selectedPartner ? { receiver_id: selectedPartner.id } : {}),
+          ...extraPayload,
+        };
+        const msg = await chatAPI.send(payload);
+        setMessages((prev) => [...prev, msg]);
       }
       setText("");
       setAttachedFiles([]);
@@ -320,7 +318,7 @@ export default function ChatPage() {
         <div style={S.header}>
           <div>
             <h1 className="page-title" style={{ fontSize: 22 }}>
-              {user.role === "admin" ? "ðŸ’¬ Seller Negotiations" : "ðŸ’¬ Chat with Admin"}
+              {user.role === "admin" ? "Seller Negotiations" : "Chat with Admin"}
             </h1>
             <p className="page-subtitle" style={{ fontSize: 13 }}>
               {user.role === "admin"
@@ -360,7 +358,7 @@ export default function ChatPage() {
           <div className="card" style={S.chatWin}>
             {!selectedPartner ? (
               <div className="empty-state">
-                <div className="empty-state-icon">ðŸ’¬</div>
+                <div className="empty-state-icon">Chat</div>
                 <div className="empty-state-title">Select a conversation</div>
               </div>
             ) : (
@@ -371,12 +369,17 @@ export default function ChatPage() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700 }}>{selectedPartner.name}</div>
                     <div style={{ fontSize: 12, color: "var(--gray-400)" }}>
-                      {selectedPartner.role === "admin" ? "ðŸ›¡ï¸ GarageSaleHub Admin" : "ðŸ‘¤ Seller"}
+                      {selectedPartner.role === "admin" ? "GarageSaleHub Admin" : "Seller"}
                     </div>
                   </div>
-                  {/* Admin: product context dropdown */}
+                  {/* Admin: product context dropdown and negotiate hint */}
                   {user.role === "admin" && (
-                    <AdminProductPicker sellerId={selectedPartner.id} value={linkedProductId} onChange={setLinkedProductId} />
+                    <>
+                      <AdminProductPicker sellerId={selectedPartner.id} value={linkedProductId} onChange={setLinkedProductId} />
+                      {!linkedProductId && selectedPartner && (
+                        <span style={{ fontSize: 11, color: "var(--gray-400)", whiteSpace: "nowrap" }}>Select item to negotiate price</span>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -385,7 +388,7 @@ export default function ChatPage() {
                   {msgLoading
                     ? <div className="loading-center"><div className="spinner" /></div>
                     : messages.length === 0
-                      ? <EmptyThread isAdmin={user.role === "admin"} />
+                      ? <EmptyThread isAdmin={user.role === "admin"} onOpenSellForm={() => setShowItemForm(true)} />
                       : messages.map((msg) => (
                           <Bubble
                             key={msg.id}
@@ -405,21 +408,24 @@ export default function ChatPage() {
                         {lastProposal.message_type === "price_counter" ? "Counter offer" : "Price proposal"}:
                       </span>{" "}
                       <span style={{ color: "var(--red)", fontWeight: 800, fontFamily: "Syne, sans-serif", fontSize: 16 }}>
-                        â‚±{lastProposal.proposed_price?.toLocaleString("en-PH")}
+                        {"\u20B1"}{lastProposal.proposed_price?.toLocaleString("en-PH")}
                       </span>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button className="btn btn-primary btn-sm"
-                        onClick={() => handleSend("price_accepted", "âœ… I accept the proposed price!", { product_id: lastProposal.product_id })}>
-                        âœ… Accept
+                        onClick={async () => {
+                          await handleSend("price_accepted", "I accept the proposed price!", { product_id: lastProposal.product_id });
+                          toast("Price accepted! The negotiated price has been saved.", "success");
+                        }}>
+                        Accept
                       </button>
                       <button className="btn btn-sm" style={S.counterBtn}
                         onClick={() => { setShowCounterOffer(true); setCounterPrice(String(lastProposal.proposed_price || "")); }}>
-                        ðŸ”„ Counter
+                        Counter
                       </button>
                       <button className="btn btn-sm" style={S.rejectBtn}
-                        onClick={() => handleSend("price_rejected", "âŒ I'd like to negotiate further on the price.", { product_id: lastProposal.product_id })}>
-                        âŒ Decline
+                        onClick={() => handleSend("price_rejected", { product_id: lastProposal.product_id })}>
+                        âDecline
                       </button>
                     </div>
                   </div>
@@ -428,12 +434,12 @@ export default function ChatPage() {
                 {/* â”€â”€ Counter offer input â”€â”€ */}
                 {showCounterOffer && (
                   <div style={S.inlinePanel}>
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>ðŸ”„ Your Counter Offer: â‚±</span>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>Your Counter Offer: {"\u20B1"}</span>
                     <input className="input-field" type="number" placeholder="e.g. 1300" value={counterPrice}
                       onChange={(e) => setCounterPrice(e.target.value)}
                       style={{ width: 120, padding: "6px 10px" }} />
                     <button className="btn btn-primary btn-sm" disabled={!counterPrice}
-                      onClick={() => handleSend("price_counter", `ðŸ”„ Counter offer: â‚±${parseFloat(counterPrice).toLocaleString("en-PH")}`, { proposed_price: parseFloat(counterPrice), product_id: lastProposal?.product_id })}>
+                      onClick={() => handleSend("price_counter", "Counter offer: PHP " + parseFloat(counterPrice).toLocaleString("en-PH"), { proposed_price: parseFloat(counterPrice), product_id: lastProposal?.product_id })}>
                       Send Counter
                     </button>
                     <button className="btn btn-ghost btn-sm" onClick={() => setShowCounterOffer(false)}>Cancel</button>
@@ -443,24 +449,46 @@ export default function ChatPage() {
                 {/* â”€â”€ Admin: price proposal input â”€â”€ */}
                 {user.role === "admin" && showPriceProposal && (
                   <div style={S.inlinePanel}>
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>ðŸ’° Propose Price: â‚±</span>
-                    <input className="input-field" type="number" placeholder="e.g. 1200" value={proposalPrice}
-                      onChange={(e) => setProposalPrice(e.target.value)}
-                      style={{ width: 120, padding: "6px 10px" }} />
-                    <button className="btn btn-primary btn-sm" disabled={!proposalPrice}
-                      onClick={() => handleSend("price_proposal",
-                        `ðŸ’° I'm proposing â‚±${parseFloat(proposalPrice).toLocaleString("en-PH")} for this item.`,
-                        { proposed_price: parseFloat(proposalPrice), product_id: linkedProductId || undefined })}>
-                      Send Proposal
-                    </button>
+                    {linkedProductId ? (
+                      <>
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>Propose price (PHP):</span>
+                        <input className="input-field" type="number" placeholder="e.g. 1200" value={proposalPrice}
+                          onChange={(e) => setProposalPrice(e.target.value)}
+                          style={{ width: 120, padding: "6px 10px" }} />
+                        <button className="btn btn-primary btn-sm" disabled={!proposalPrice}
+                          onClick={() => handleSend("price_proposal",
+                            `I'm proposing PHP ${parseFloat(proposalPrice).toLocaleString("en-PH")} for this item.`,
+                            { proposed_price: parseFloat(proposalPrice), product_id: linkedProductId })}>
+                          Send proposal
+                        </button>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 13, color: "var(--gray-500)" }}>Select an item from the dropdown above to negotiate price.</span>
+                    )}
                     <button className="btn btn-ghost btn-sm" onClick={() => setShowPriceProposal(false)}>Cancel</button>
                   </div>
                 )}
 
-                {/* â”€â”€ Item submission form panel â”€â”€ */}
-                
+                {/* Item submission form panel (user: sell item in chat) */}
+                {showItemForm && (
+                  <ItemSubmissionForm
+                    categories={categories}
+                    form={itemForm}
+                    setForm={setItemForm}
+                    previews={itemPreviews}
+                    onFiles={handleItemFiles}
+                    fileRef={itemFileRef}
+                    onSubmit={handleSubmitItem}
+                    onCancel={() => {
+                      setShowItemForm(false);
+                      setItemValidationErrors({});
+                    }}
+                    sending={sending}
+                    errors={itemValidationErrors}
+                  />
+                )}
 
-                {/* â”€â”€ File previews â”€â”€ */}
+                {/* File previews */}
                 {filePreviews.length > 0 && (
                   <div style={S.previewStrip}>
                     {filePreviews.map((p, i) => (
@@ -468,7 +496,7 @@ export default function ChatPage() {
                         {p.isVideo
                           ? <video src={p.url} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 6 }} />
                           : <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 6 }} />}
-                        <button style={S.removeThumb} onClick={() => removeAttached(i)}>âœ•</button>
+                        <button style={S.removeThumb} onClick={() => removeAttached(i)} aria-label="Remove">&#215;</button>
                       </div>
                     ))}
                   </div>
@@ -477,26 +505,40 @@ export default function ChatPage() {
                 {/* â”€â”€ Toolbar row (seller quick actions) â”€â”€ */}
                 {!showItemForm && (
                   <div style={S.toolbar}>
-                    
+                    {/* User: open sell-item form in chat */}
+                    {user.role !== "admin" && (
+                      <button
+                        style={{ ...S.toolBtn, background: "#fff5f5", borderColor: "var(--red)", color: "var(--red)" }}
+                        onClick={() => setShowItemForm(true)}
+                      >
+                        Sell Item in Chat
+                      </button>
+                    )}
                     {user.role === "admin" && (
                       <>
                         <button style={S.toolBtn} onClick={() => { setShowPriceProposal(!showPriceProposal); setShowCounterOffer(false); }}>
-                          ðŸ’° <span style={S.toolLabel}>Propose Price</span>
+                          Propose Price
                         </button>
-                        <button style={S.toolBtn} onClick={() => setText("Please retake photos with:\nâ‘  Multiple angles\nâ‘¡ Good lighting\nâ‘¢ Clear background\nâ‘£ Place a handwritten date + verification code next to the item")}>
-                          ðŸ“¸ <span style={S.toolLabel}>Request Photos</span>
+                        <button style={S.toolBtn} onClick={() => setText("Please retake photos with:\n1. Multiple angles\n2. Good lighting\n3. Clear background\n4. Place a handwritten date + verification code next to the item")}>
+                          Request Photos
                         </button>
-                        <button style={S.toolBtn} onClick={() => setText("âœ… Your item has been approved and is now listed on the platform!")}>
-                          âœ… <span style={S.toolLabel}>Notify Approved</span>
+                        <button
+                          style={S.toolBtn}
+                          onClick={() => handleSend("photo_request", "Please send a short video (under 1 min) showing the item working as proof it's real. Use the Attach Photo/Video button below to upload your video.")}
+                        >
+                          Request Video Proof
                         </button>
-                        <button style={S.toolBtn} onClick={() => setText("âŒ We cannot accept this item at this time. Reason: ")}>
-                          âŒ <span style={S.toolLabel}>Notify Rejected</span>
+                        <button style={S.toolBtn} onClick={() => setText("Your item has been approved and is now listed on the platform!")}>
+                          Notify Approved
+                        </button>
+                        <button style={S.toolBtn} onClick={() => setText("We cannot accept this item at this time. Reason: ")}>
+                          Notify Rejected
                         </button>
                       </>
                     )}
                     {/* Attach file button (both roles) */}
                     <button style={{ ...S.toolBtn, marginLeft: "auto" }} onClick={() => fileInputRef.current?.click()}>
-                      ðŸ“Ž <span style={S.toolLabel}>Attach Photo/Video</span>
+                      Attach Photo/Video
                     </button>
                     <input ref={fileInputRef} type="file" multiple accept="image/*,video/*" style={{ display: "none" }} onChange={handleAttachFiles} />
                   </div>
@@ -512,7 +554,7 @@ export default function ChatPage() {
                       style={{ flex: 1, resize: "none", lineHeight: 1.5, minHeight: 108 }}
                       placeholder={user.role === "admin"
                         ? "Reply to seller, give instructions, or negotiate..."
-                        : "Type a message to admin..."}
+                        : "Type a message or attach a photo/video (e.g. for proof when admin asks)..."}
                       value={text}
                       onChange={(e) => setText(e.target.value)}
                       onKeyDown={(e) => {
@@ -537,26 +579,31 @@ export default function ChatPage() {
 
 // â”€â”€â”€ Sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function EmptyThread({ isAdmin }) {
+function EmptyThread({ isAdmin, onOpenSellForm }) {
   return (
     <div style={{ textAlign: "center", padding: "40px 24px", color: "var(--gray-500)" }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>ðŸ‘‹</div>
+      <div style={{ fontSize: 48, marginBottom: 12 }}>Chat</div>
       {isAdmin ? (
         <p style={{ fontSize: 14 }}>No messages yet from this seller. Wait for their submission or start the conversation.</p>
       ) : (
         <div>
-          <p style={{ fontWeight: 700, fontSize: 15, color: "var(--black)", marginBottom: 8 }}>Messages are separate from Sell.</p>
+          <p style={{ fontWeight: 700, fontSize: 15, color: "var(--black)", marginBottom: 8 }}>Submit items here or on the Sell page</p>
           <p style={{ fontSize: 13, marginBottom: 20, lineHeight: 1.7 }}>
-            Use the Sell page to submit an item. Use this page only to chat with admin.
+            Fill out the form in chat to submit an item for review, or use the Sell page. Admin will respond here.
           </p>
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <Link className="btn btn-primary" to="/sell">Go to Sell Page</Link>
+            {onOpenSellForm && (
+              <button type="button" className="btn btn-primary" onClick={onOpenSellForm}>
+                Sell Item in Chat
+              </button>
+            )}
+            <Link className="btn btn-ghost" to="/sell">Go to Sell Page</Link>
           </div>
           <div style={{ marginTop: 20, background: "var(--gray-50)", borderRadius: 10, padding: 16, fontSize: 13, textAlign: "left" }}>
-            <strong>ðŸ“¸ Photo Guidelines:</strong>
+            <strong>Photo Guidelines:</strong>
             <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
               {["Multiple angles", "Good lighting", "Clear background", "Handwritten date + verification code next to item"].map((g) => (
-                <span key={g} style={{ color: "var(--green)" }}>âœ… {g}</span>
+                <span key={g} style={{ color: "var(--green)" }}>OK {g}</span>
               ))}
             </div>
           </div>
@@ -584,13 +631,13 @@ function Bubble({ msg, isMe }) {
           </div>
           {msg.proposed_price && (
             <div style={{ fontSize: 22, fontWeight: 800, color: c.text, fontFamily: "Syne, sans-serif", marginBottom: 6 }}>
-              â‚±{msg.proposed_price.toLocaleString("en-PH")}
+              {"\u20B1"}{msg.proposed_price.toLocaleString("en-PH")}
             </div>
           )}
           <p style={{ margin: 0, fontSize: 14, color: "var(--black)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{msg.content}</p>
           {hasAttachments && <AttachmentGrid attachments={msg.attachments} />}
           <div style={{ fontSize: 10, color: "var(--gray-400)", marginTop: 8, textAlign: "right" }}>
-            {msg.sender_name} Â· {timeStr}
+            {msg.sender_name}{" \u00B7 "}{timeStr}
           </div>
         </div>
       </div>

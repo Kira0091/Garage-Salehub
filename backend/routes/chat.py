@@ -44,7 +44,7 @@ def send_message():
     if err:
         return jsonify({"error": err}), 400
 
-    msg_type = data.get("message_type", "chat")
+    msg_type = data.get("message_type", "chat")  # chat | item_submission | price_* | photo_request (admin asks for video/photo proof)
     proposed_price = data.get("proposed_price")
     product_id = data.get("product_id")
     content = data.get("content", "")
