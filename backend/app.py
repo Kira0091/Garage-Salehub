@@ -8,6 +8,9 @@ from routes.orders import orders_bp
 from routes.chat import chat_bp
 from routes.admin import admin_bp
 from routes.users import users_bp
+from routes.wishlist import wishlist_bp
+from routes.notifications import notifications_bp
+from routes.reviews import reviews_bp
 import os
 import sqlite3
 try:
@@ -52,6 +55,19 @@ app.register_blueprint(orders_bp, url_prefix="/api/orders")
 app.register_blueprint(chat_bp, url_prefix="/api/chat")
 app.register_blueprint(admin_bp, url_prefix="/api/admin")
 app.register_blueprint(users_bp, url_prefix="/api/users")
+app.register_blueprint(wishlist_bp, url_prefix="/api/wishlist")
+app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
+app.register_blueprint(reviews_bp, url_prefix="/api/reviews")
+
+
+def _sqlite_db_path():
+    instance_path = os.path.join(app.instance_path, "garagesalehub.db")
+    if os.path.exists(instance_path):
+        return instance_path
+    cwd_path = os.path.join(os.getcwd(), "garagesalehub.db")
+    if os.path.exists(cwd_path):
+        return cwd_path
+    return None
 
 
 def ensure_message_columns():
@@ -59,8 +75,8 @@ def ensure_message_columns():
     if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite:///"):
         return
 
-    db_path = os.path.join(app.instance_path, "garagesalehub.db")
-    if not os.path.exists(db_path):
+    db_path = _sqlite_db_path()
+    if not db_path:
         return
 
     conn = sqlite3.connect(db_path)
@@ -87,9 +103,39 @@ def ensure_message_columns():
     finally:
         conn.close()
 
+
+def ensure_product_columns():
+    """SQLite migration for new product fields."""
+    if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite:///"):
+        return
+
+    db_path = _sqlite_db_path()
+    if not db_path:
+        return
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(products)")
+        cols = {row[1] for row in cur.fetchall()}
+        if not cols:
+            return
+
+        migrations = [
+            ("location", "TEXT", "''"),
+            ("view_count", "INTEGER", "0"),
+        ]
+        for name, col_type, default in migrations:
+            if name not in cols:
+                cur.execute(f"ALTER TABLE products ADD COLUMN {name} {col_type} DEFAULT {default}")
+        conn.commit()
+    finally:
+        conn.close()
+
 with app.app_context():
     db.create_all()
     ensure_message_columns()
+    ensure_product_columns()
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
