@@ -1,11 +1,11 @@
 // src/pages/AdminPage.jsx
 import { useState, useEffect } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
-import { adminAPI, ordersAPI, productsAPI } from "../services/api";
+import { Navigate, useNavigate } from "react-router-dom";
+import { adminAPI, ordersAPI, productsAPI, chatAPI } from "../services/api";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
 
-const TABS = ["Dashboard", "Pending Items", "All Products", "Orders", "Users"];
+const TABS = ["Dashboard", "Pending Items", "All Products", "Orders", "Users", "Messages"];
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -20,6 +20,8 @@ export default function AdminPage() {
   const [negotiatedPrice, setNegotiatedPrice] = useState("");
   const [rejectModal, setRejectModal] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [conversations, setConversations] = useState([]);
+  const [convLoading, setConvLoading] = useState(false);
   const toast = useToast();
   const admin = String(user?.role || "").trim().toLowerCase() === "admin";
 
@@ -39,6 +41,12 @@ export default function AdminPage() {
   useEffect(() => {
     if (tab === "Orders") adminAPI.getAllOrders().then(setAllOrders);
     if (tab === "Users") adminAPI.getUsers().then(setUsers);
+    if (tab === "Messages") {
+      setConvLoading(true);
+      chatAPI.conversations()
+        .then(setConversations)
+        .finally(() => setConvLoading(false));
+    }
   }, [tab]);
 
   const handleApprove = async (product) => {
@@ -292,6 +300,38 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* Messages tab */}
+        {tab === "Messages" && (
+          <div className="fade-in card" style={{ padding: 20 }}>
+            <h3 style={{ fontSize: 16, marginBottom: 12 }}>Seller Conversations</h3>
+            {convLoading ? (
+              <div className="loading-center"><div className="spinner" /></div>
+            ) : conversations.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--gray-400)" }}>No conversations yet.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {conversations.map(({ partner, last_message, unread_count }) => (
+                  <div key={partner?.id} style={styles.convRow}>
+                    <div style={styles.convAvatar}>{partner?.name?.[0]?.toUpperCase()}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{partner?.name}</div>
+                      <div style={styles.convLast}>{last_message?.content || "No messages yet"}</div>
+                    </div>
+                    {unread_count > 0 && <span style={styles.unreadBadge}>{unread_count}</span>}
+                    <button
+                      className="btn btn-sm"
+                      style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}
+                      onClick={() => openMessage(partner)}
+                    >
+                      Open Chat
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Negotiate Modal */}
@@ -370,4 +410,8 @@ const styles = {
     cursor: "pointer",
   },
   pendingActions: { display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 },
+  convRow: { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", border: "1px solid var(--gray-100)", borderRadius: 10 },
+  convAvatar: { width: 34, height: 34, borderRadius: "50%", background: "var(--red)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 },
+  convLast: { fontSize: 12, color: "var(--gray-400)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  unreadBadge: { background: "var(--red)", color: "white", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 },
 };
