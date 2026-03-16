@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from database import db, Product, User, Order, Category
+from database import db, Product, User, Order, Category, Notification, Wishlist
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -22,6 +22,16 @@ def pending_products():
     return jsonify([p.to_dict() for p in products]), 200
 
 
+@admin_bp.route("/products/inventory", methods=["GET"])
+@jwt_required()
+def inventory_products():
+    _, err, status = require_admin()
+    if err:
+        return err, status
+    products = Product.query.filter_by(status="inventory").order_by(Product.created_at.desc()).all()
+    return jsonify([p.to_dict() for p in products]), 200
+
+
 @admin_bp.route("/products/<int:product_id>/approve", methods=["POST"])
 @jwt_required()
 def approve_product(product_id):
@@ -33,6 +43,72 @@ def approve_product(product_id):
     data = request.get_json() or {}
     product.status = "approved"
     product.negotiated_price = data.get("negotiated_price", product.negotiated_price)
+    db.session.commit()
+    if product.negotiated_price:
+        wishers = Wishlist.query.filter_by(product_id=product.id).all()
+        for w in wishers:
+            last_seen = w.last_seen_price if w.last_seen_price is not None else product.price
+            if product.negotiated_price < last_seen and (w.target_price is None or product.negotiated_price <= w.target_price):
+                db.session.add(Notification(
+                    user_id=w.user_id,
+                    type="price_drop",
+                    title="Price Drop Alert",
+                    body=f"{product.title} dropped to ₱{product.negotiated_price:,.2f}",
+                    link=f"/product/{product.id}",
+                ))
+            w.last_seen_price = product.negotiated_price
+        db.session.commit()
+    db.session.add(Notification(
+        user_id=product.seller_id,
+        type="approval",
+        title="Item Approved",
+        body=f"Your item '{product.title}' has been approved.",
+        link=f"/product/{product.id}",
+    ))
+    db.session.commit()
+    return jsonify(product.to_dict()), 200
+
+
+@admin_bp.route("/products/<int:product_id>/release", methods=["POST"])
+@jwt_required()
+def release_product(product_id):
+    _, err, status = require_admin()
+    if err:
+        return err, status
+
+    product = Product.query.get_or_404(product_id)
+    product.status = "approved"
+    db.session.commit()
+
+    db.session.add(Notification(
+        user_id=product.seller_id,
+        type="release",
+        title="Item Released",
+        body=f"Your item '{product.title}' has been released to the marketplace.",
+        link=f"/product/{product.id}",
+    ))
+    db.session.commit()
+    return jsonify(product.to_dict()), 200
+
+
+@admin_bp.route("/products/<int:product_id>/to-inventory", methods=["POST"])
+@jwt_required()
+def move_to_inventory(product_id):
+    _, err, status = require_admin()
+    if err:
+        return err, status
+
+    product = Product.query.get_or_404(product_id)
+    product.status = "inventory"
+    db.session.commit()
+
+    db.session.add(Notification(
+        user_id=product.seller_id,
+        type="inventory",
+        title="Item Moved to Inventory",
+        body=f"Your item '{product.title}' has been moved back to inventory.",
+        link="/my-products",
+    ))
     db.session.commit()
     return jsonify(product.to_dict()), 200
 
@@ -49,6 +125,14 @@ def reject_product(product_id):
     product.status = "rejected"
     product.rejection_reason = data.get("reason", "Item did not meet quality standards")
     db.session.commit()
+    db.session.add(Notification(
+        user_id=product.seller_id,
+        type="rejection",
+        title="Item Rejected",
+        body=f"Your item '{product.title}' was rejected: {product.rejection_reason}",
+        link="/my-products",
+    ))
+    db.session.commit()
     return jsonify(product.to_dict()), 200
 
 
@@ -62,6 +146,7 @@ def dashboard():
     total_users = User.query.filter_by(role="user").count()
     total_products = Product.query.count()
     pending_products = Product.query.filter_by(status="pending").count()
+    inventory_products = Product.query.filter_by(status="inventory").count()
     approved_products = Product.query.filter_by(status="approved").count()
     total_orders = Order.query.count()
     total_revenue = db.session.query(db.func.sum(Order.total_amount)).filter(
@@ -76,6 +161,7 @@ def dashboard():
             "total_users": total_users,
             "total_products": total_products,
             "pending_products": pending_products,
+            "inventory_products": inventory_products,
             "approved_products": approved_products,
             "total_orders": total_orders,
             "total_revenue": total_revenue,

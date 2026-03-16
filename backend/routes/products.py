@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify, current_app, send_from_directory
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from werkzeug.utils import secure_filename
-from database import db, Product, Category, User
+from database import db, Product, Category, User, Wishlist, Notification
 import os, uuid
+ 
 
 products_bp = Blueprint("products", __name__)
 
@@ -17,16 +18,55 @@ def get_products():
     status = request.args.get("status", "approved")
     category_id = request.args.get("category_id")
     search = request.args.get("search", "")
+    condition = request.args.get("condition")
+    location = request.args.get("location")
+    min_price = request.args.get("min_price")
+    max_price = request.args.get("max_price")
+    sort = request.args.get("sort", "newest")
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 12))
+
+    # Only admins can query non-approved statuses
+    if status != "approved":
+        try:
+            verify_jwt_in_request(optional=True)
+            user_id = get_jwt_identity()
+            user = User.query.get(int(user_id)) if user_id else None
+            if not user or user.role != "admin":
+                status = "approved"
+        except Exception:
+            status = "approved"
 
     query = Product.query.filter_by(status=status)
     if category_id:
         query = query.filter_by(category_id=int(category_id))
     if search:
         query = query.filter(Product.title.ilike(f"%{search}%"))
+    if condition:
+        query = query.filter(Product.condition == condition)
+    if location:
+        query = query.filter(Product.location.ilike(f"%{location}%"))
+    if min_price:
+        try:
+            query = query.filter(Product.price >= float(min_price))
+        except ValueError:
+            pass
+    if max_price:
+        try:
+            query = query.filter(Product.price <= float(max_price))
+        except ValueError:
+            pass
 
-    pagination = query.order_by(Product.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+    if sort == "price_asc":
+        query = query.order_by(Product.price.asc())
+    elif sort == "price_desc":
+        query = query.order_by(Product.price.desc())
+    elif sort == "views_desc":
+        query = query.order_by(Product.view_count.desc())
+    else:
+        query = query.order_by(Product.created_at.desc())
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     return jsonify({
         "products": [p.to_dict() for p in pagination.items],
         "total": pagination.total,
@@ -38,6 +78,8 @@ def get_products():
 @products_bp.route("/<int:product_id>", methods=["GET"])
 def get_product(product_id):
     product = Product.query.get_or_404(product_id)
+    product.view_count = (product.view_count or 0) + 1
+    db.session.commit()
     return jsonify(product.to_dict()), 200
 
 
@@ -65,6 +107,7 @@ def create_product():
         images=",".join(images),
         category_id=int(data["category_id"]) if data.get("category_id") else None,
         seller_id=user_id,
+        location=data.get("location", ""),
         status="pending",
     )
     db.session.add(product)
@@ -83,11 +126,30 @@ def update_product(product_id):
         return jsonify({"error": "Unauthorized"}), 403
 
     data = request.get_json()
+    old_price = product.price
     product.title = data.get("title", product.title)
     product.description = data.get("description", product.description)
     product.condition = data.get("condition", product.condition)
     product.price = float(data.get("price", product.price))
     product.quantity = int(data.get("quantity", product.quantity))
+    product.location = data.get("location", product.location)
+    db.session.flush()
+
+    # Price drop alerts for wishlisted items
+    if product.price < old_price:
+        wishers = Wishlist.query.filter_by(product_id=product.id).all()
+        for w in wishers:
+            last_seen = w.last_seen_price if w.last_seen_price is not None else old_price
+            if product.price < last_seen and (w.target_price is None or product.price <= w.target_price):
+                note = Notification(
+                    user_id=w.user_id,
+                    type="price_drop",
+                    title="Price Drop Alert",
+                    body=f"{product.title} dropped to ₱{product.price:,.2f}",
+                    link=f"/product/{product.id}",
+                )
+                db.session.add(note)
+            w.last_seen_price = product.price
     db.session.commit()
     return jsonify(product.to_dict()), 200
 

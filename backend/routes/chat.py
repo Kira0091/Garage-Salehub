@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
-from database import db, Message, User, Product
+from database import db, Message, User, Product, Notification, Wishlist
 import os, uuid
 
 chat_bp = Blueprint("chat", __name__)
@@ -74,6 +74,7 @@ def send_message():
             category_id=int(item_data["category_id"]) if item_data.get("category_id") else None,
             images=",".join(attachments),
             seller_id=user_id,
+            location=item_data.get("location", ""),
             status="pending",
         )
         db.session.add(product)
@@ -81,16 +82,34 @@ def send_message():
         product_id = product.id
         content = content or f"New item submitted for review: {product.title}"
 
-    # price_accepted â†’ lock negotiated price
+    # price_accepted -> lock negotiated price from the latest proposal/counter by the other party
     if msg_type == "price_accepted" and product_id:
         product = Product.query.get(int(product_id))
-        if product and product.seller_id == user_id:
-            last = Message.query.filter_by(
-                product_id=int(product_id), message_type="price_proposal", receiver_id=user_id
+        if product:
+            last = Message.query.filter(
+                Message.product_id == int(product_id),
+                Message.message_type.in_(["price_proposal", "price_counter"]),
+                Message.sender_id != user_id,
+                Message.proposed_price.isnot(None),
             ).order_by(Message.created_at.desc()).first()
-            if last and last.proposed_price:
-                product.negotiated_price = last.proposed_price
+            if last and last.proposed_price is not None:
+                product.negotiated_price = float(last.proposed_price)
+                if product.status in ["pending", "approved"]:
+                    product.status = "inventory"
                 db.session.flush()
+
+                wishers = Wishlist.query.filter_by(product_id=product.id).all()
+                for w in wishers:
+                    last_seen = w.last_seen_price if w.last_seen_price is not None else product.price
+                    if product.negotiated_price < last_seen and (w.target_price is None or product.negotiated_price <= w.target_price):
+                        db.session.add(Notification(
+                            user_id=w.user_id,
+                            type="price_drop",
+                            title="Price Drop Alert",
+                            body=f"{product.title} dropped to ₱{product.negotiated_price:,.2f}",
+                            link=f"/product/{product.id}",
+                        ))
+                    w.last_seen_price = product.negotiated_price
 
     # price_proposal â†’ save proposed price on product
     if msg_type == "price_proposal" and proposed_price and product_id:
@@ -116,6 +135,15 @@ def send_message():
         attachments=",".join(attachments),
     )
     db.session.add(msg)
+    db.session.commit()
+
+    db.session.add(Notification(
+        user_id=receiver.id,
+        type="message",
+        title="New Message",
+        body=f"{sender.name} sent you a message.",
+        link="/chat",
+    ))
     db.session.commit()
     return jsonify(msg.to_dict()), 201
 

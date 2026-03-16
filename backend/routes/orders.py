@@ -1,8 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from database import db, Order, OrderItem, Product, User
+from database import db, Order, OrderItem, Product, User, Notification
 import random, string
-from datetime import datetime, timedelta
 
 orders_bp = Blueprint("orders", __name__)
 
@@ -57,6 +56,24 @@ def create_order():
             item["product"].status = "sold"
         db.session.add(oi)
 
+    db.session.commit()
+    # Notifications
+    db.session.add(Notification(
+        user_id=user_id,
+        type="order",
+        title="Order Placed",
+        body=f"Your order #{order.id} has been placed.",
+        link=f"/orders",
+    ))
+    seller_ids = {item["product"].seller_id for item in order_items}
+    for sid in seller_ids:
+        db.session.add(Notification(
+            user_id=sid,
+            type="order",
+            title="New Order",
+            body="You received a new order.",
+            link="/orders",
+        ))
     db.session.commit()
     return jsonify(order.to_dict()), 201
 
@@ -136,6 +153,14 @@ def update_order_status(order_id):
         order.payment_status = "refunded" if order.payment_status == "paid" else "pending"
 
     db.session.commit()
+    db.session.add(Notification(
+        user_id=order.buyer_id,
+        type="order_status",
+        title="Order Status Update",
+        body=f"Your order #{order.id} is now {order.status}.",
+        link="/orders",
+    ))
+    db.session.commit()
     return jsonify(order.to_dict()), 200
 
 
@@ -155,5 +180,13 @@ def cancel_order(order_id):
         item.product.stock += item.quantity
         if item.product.status == "sold":
             item.product.status = "approved"
+    db.session.commit()
+    db.session.add(Notification(
+        user_id=order.buyer_id,
+        type="order",
+        title="Order Cancelled",
+        body=f"Your order #{order.id} has been cancelled.",
+        link="/orders",
+    ))
     db.session.commit()
     return jsonify(order.to_dict()), 200
