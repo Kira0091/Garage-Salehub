@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app, send_from_directory
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from database import db, Message, User, Product, Notification, Wishlist
+from auth_helpers import login_required, get_current_user_id
 import os, uuid
 
 chat_bp = Blueprint("chat", __name__)
@@ -31,9 +31,9 @@ def get_receiver(sender, data):
 
 
 @chat_bp.route("/", methods=["POST"])
-@jwt_required()
+@login_required
 def send_message():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     sender = User.query.get(user_id)
 
     # Support both multipart (with files) and JSON
@@ -149,9 +149,9 @@ def send_message():
 
 
 @chat_bp.route("/conversations", methods=["GET"])
-@jwt_required()
+@login_required
 def get_conversations():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     user = User.query.get(user_id)
 
     if user.role == "admin":
@@ -183,9 +183,9 @@ def get_conversations():
 
 
 @chat_bp.route("/<int:partner_id>", methods=["GET"])
-@jwt_required()
+@login_required
 def get_messages(partner_id):
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     user = User.query.get(user_id)
     if user.role != "admin":
         admin = get_admin()
@@ -201,7 +201,7 @@ def get_messages(partner_id):
 
 
 @chat_bp.route("/admin-id", methods=["GET"])
-@jwt_required()
+@login_required
 def get_admin_id():
     admin = get_admin()
     if not admin:

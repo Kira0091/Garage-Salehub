@@ -16,6 +16,7 @@ from routes.notifications import notifications_bp
 from routes.reviews import reviews_bp
 import os
 import sqlite3
+from datetime import timedelta
 try:
     from dotenv import load_dotenv
 except Exception:
@@ -54,10 +55,18 @@ app.config["JWT_SECRET_KEY"] = os.getenv(
     "garage-salehub-jwt-secret-key-2026-minimum-32bytes",
 )
 app.config["UPLOAD_FOLDER"] = "uploads"
+app.config["SECRET_KEY"] = os.getenv(
+    "SECRET_KEY",
+    "garage-salehub-session-secret-key-2026-minimum-32bytes",
+)
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = False
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
-CORS(app, origins=["http://localhost:3000"])
+CORS(app, origins=["http://localhost:3000"], supports_credentials=True)
 JWTManager(app)
 db.init_app(app)
 

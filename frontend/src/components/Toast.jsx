@@ -1,5 +1,6 @@
-// src/components/Toast.jsx
+﻿// src/components/Toast.jsx
 import { createContext, useContext, useState, useCallback } from "react";
+import Icon from "./Icon";
 
 const ToastContext = createContext(null);
 
@@ -12,7 +13,11 @@ export function ToastProvider({ children }) {
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500);
   }, []);
 
-  const icons = { success: "✅", error: "❌", info: "ℹ️" };
+  const icons = {
+    success: <Icon name="check-circle" size={16} color="var(--green)" />,
+    error: <Icon name="x-circle" size={16} color="var(--red)" />,
+    info: <Icon name="message" size={16} color="var(--blue)" />,
+  };
 
   return (
     <ToastContext.Provider value={addToast}>
@@ -20,7 +25,7 @@ export function ToastProvider({ children }) {
       <div className="toast-container">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.type}`}>
-            <span>{icons[t.type]}</span>
+            <span>{icons[t.type] || icons.info}</span>
             <span>{t.message}</span>
           </div>
         ))}

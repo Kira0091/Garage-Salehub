@@ -1,14 +1,14 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from database import db, Review, Order, Product, User, Notification
+from auth_helpers import login_required, get_current_user_id
 
 reviews_bp = Blueprint("reviews", __name__)
 
 
 @reviews_bp.route("/", methods=["POST"])
-@jwt_required()
+@login_required
 def create_review():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     data = request.get_json() or {}
     order_id = data.get("order_id")
     product_id = data.get("product_id")
@@ -79,8 +79,8 @@ def get_seller_reviews(seller_id):
 
 
 @reviews_bp.route("/me", methods=["GET"])
-@jwt_required()
+@login_required
 def get_my_reviews():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     reviews = Review.query.filter_by(seller_id=user_id).order_by(Review.created_at.desc()).all()
     return jsonify([r.to_dict() for r in reviews]), 200

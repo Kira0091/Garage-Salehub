@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { chatAPI, productsAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { useToast } from "../components/Toast";
+import { alertError, alertSuccess } from "../utils/alerts";
+import Icon from "../components/Icon";
 
 // â”€â”€â”€ Message type config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TYPE_CONFIG = {
@@ -40,7 +41,6 @@ const ITEM_FIELD_LABELS = {
 // â”€â”€â”€ Main Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function ChatPage() {
   const { user } = useAuth();
-  const toast = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isAdmin = String(user?.role || "").trim().toLowerCase() === "admin";
@@ -74,7 +74,9 @@ export default function ChatPage() {
   const [itemPreviews, setItemPreviews] = useState([]);
   const [itemValidationErrors, setItemValidationErrors] = useState({});
 
-  const messagesEnd = useRef(null);
+  const msgAreaRef = useRef(null);
+  const shouldStickToBottomRef = useRef(true);
+  const prevTailMessageIdRef = useRef(null);
   const fileInputRef = useRef(null);
   const itemFileRef = useRef(null);
   const pollRef = useRef(null);
@@ -114,7 +116,16 @@ export default function ChatPage() {
   }, [selectedPartner?.id]);
 
   useEffect(() => {
-    messagesEnd.current?.scrollIntoView({ behavior: "smooth" });
+    const scroller = msgAreaRef.current;
+    if (!scroller) return;
+    const tailMessageId = messages[messages.length - 1]?.id ?? null;
+    const tailChanged = tailMessageId !== prevTailMessageIdRef.current;
+
+    if (tailChanged && shouldStickToBottomRef.current) {
+      scroller.scrollTop = scroller.scrollHeight;
+    }
+
+    prevTailMessageIdRef.current = tailMessageId;
   }, [messages]);
 
   // â”€â”€ Data loaders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -226,9 +237,9 @@ export default function ChatPage() {
       loadConversations(false);
     } catch (e) {
       if (String(e?.message || "").includes("Failed to fetch")) {
-        toast("Cannot reach backend server. Make sure backend is running at http://localhost:5000.", "error");
+        await alertError("Cannot reach backend server. Make sure backend is running at http://localhost:5000.");
       } else {
-        toast(e.message, "error");
+        await alertError(e.message || "Message failed");
       }
     } finally {
       setSending(false);
@@ -249,7 +260,7 @@ export default function ChatPage() {
     if (isBlankForm) {
       const blankErrors = { title: true, price: true, category_id: true, description: true, reason: true, files: true };
       setItemValidationErrors(blankErrors);
-      toast("Please fill in the item submission form before submitting.", "error");
+      await alertError("Please fill in the item submission form before submitting.", "Incomplete form");
       return;
     }
 
@@ -264,7 +275,7 @@ export default function ChatPage() {
     if (Object.keys(validationErrors).length > 0) {
       setItemValidationErrors(validationErrors);
       const missing = Object.keys(validationErrors).map((k) => ITEM_FIELD_LABELS[k]).join(", ");
-      toast(`Please complete the required areas: ${missing}`, "error");
+      await alertError(`Please complete the required areas: ${missing}`, "Missing required details");
       return;
     }
 
@@ -294,13 +305,13 @@ export default function ChatPage() {
       setItemFiles([]);
       setItemPreviews([]);
       setItemValidationErrors({});
-      toast("Item submitted! Admin will review and respond here.", "success");
+      await alertSuccess("Item submitted", "Admin will review and respond here.");
       loadConversations(false);
     } catch (e) {
       if (String(e?.message || "").includes("Failed to fetch")) {
-        toast("Cannot reach backend server. Make sure backend is running at http://localhost:5000.", "error");
+        await alertError("Cannot reach backend server. Make sure backend is running at http://localhost:5000.");
       } else {
-        toast(e.message, "error");
+        await alertError(e.message || "Item submission failed");
       }
     } finally {
       setSending(false);
@@ -375,7 +386,7 @@ export default function ChatPage() {
           <div className="card" style={S.chatWin}>
             {!selectedPartner ? (
               <div className="empty-state">
-                <div className="empty-state-icon">Chat</div>
+                <div className="empty-state-icon"><Icon name="message" size={44} color="var(--gray-400)" /></div>
                 <div className="empty-state-title">Select a conversation</div>
               </div>
             ) : (
@@ -401,7 +412,16 @@ export default function ChatPage() {
                 </div>
 
                 {/* Messages area */}
-                <div style={S.msgArea}>
+                <div
+                  style={S.msgArea}
+                  ref={msgAreaRef}
+                  onScroll={() => {
+                    const scroller = msgAreaRef.current;
+                    if (!scroller) return;
+                    const distanceFromBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+                    shouldStickToBottomRef.current = distanceFromBottom < 80;
+                  }}
+                >
                   {msgLoading
                     ? <div className="loading-center"><div className="spinner" /></div>
                     : messages.length === 0
@@ -414,7 +434,6 @@ export default function ChatPage() {
                           />
                         ))
                   }
-                  <div ref={messagesEnd} />
                 </div>
 
                 {/* â”€â”€ Pending proposal action bar â”€â”€ */}
@@ -432,7 +451,7 @@ export default function ChatPage() {
                       <button className="btn btn-primary btn-sm"
                         onClick={async () => {
                           await handleSend("price_accepted", "I accept the proposed price!", { product_id: lastProposal.product_id });
-                          toast("Price accepted! The negotiated price has been saved.", "success");
+                          await alertSuccess("Price accepted", "The negotiated price has been saved.");
                           localStorage.setItem("my_products_refresh", Date.now().toString());
                         }}>
                         Accept
@@ -443,7 +462,7 @@ export default function ChatPage() {
                       </button>
                       <button className="btn btn-sm" style={S.rejectBtn}
                         onClick={() => handleSend("price_rejected", { product_id: lastProposal.product_id })}>
-                        âDecline
+                        Decline
                       </button>
                     </div>
                   </div>
@@ -762,7 +781,7 @@ function ItemSubmissionForm({ categories, form, setForm, previews, onFiles, file
             <label>Category *</label>
             <select className="input-field" style={errors.category_id ? S.fieldError : undefined} value={form.category_id} onChange={(e) => set("category_id", e.target.value)}>
               <option value="">Select category</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="input-group">
@@ -895,11 +914,6 @@ const S = {
   },
   uploadBox: { border: "2px dashed var(--gray-300)", borderRadius: 10, cursor: "pointer", minHeight: 80, transition: "border-color 0.15s" },
 };
-
-
-
-
-
 
 
 

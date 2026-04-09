@@ -1,8 +1,9 @@
-// src/pages/MyProductsPage.jsx
+﻿// src/pages/MyProductsPage.jsx
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { productsAPI } from "../services/api";
-import { useToast } from "../components/Toast";
+import { alertError, alertSuccess, confirmAction } from "../utils/alerts";
+import Icon from "../components/Icon";
 
 const statusBadge = {
   pending: "badge-yellow",
@@ -13,17 +14,16 @@ const statusBadge = {
 };
 
 const statusLabel = {
-  pending: "⏳ Pending Review",
-  approved: "✅ Approved",
-  rejected: "❌ Rejected",
-  sold: "🏷️ Sold",
-  inventory: "📦 In Inventory",
+  pending: "Pending Review",
+  approved: "Approved",
+  rejected: "Rejected",
+  sold: "Sold",
+  inventory: "In Inventory",
 };
 
 export default function MyProductsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const toast = useToast();
 
   const loadProducts = async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -58,13 +58,18 @@ export default function MyProductsPage() {
   }, []);
 
   const handleDelete = async (id) => {
-    if (!confirm("Delete this submission?")) return;
+    const confirmed = await confirmAction({
+      title: "Delete this submission?",
+      text: "This action cannot be undone.",
+      confirmText: "Delete",
+    });
+    if (!confirmed) return;
     try {
       await productsAPI.delete(id);
       setProducts((prev) => prev.filter((p) => p.id !== id));
-      toast("Submission deleted", "success");
+      await alertSuccess("Deleted", "Submission removed successfully.");
     } catch (e) {
-      toast(e.message, "error");
+      await alertError(e.message || "Delete failed");
     }
   };
 
@@ -81,13 +86,12 @@ export default function MyProductsPage() {
       <div className="container">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
           <div>
-            <h1 className="page-title">📦 My Submissions</h1>
+            <h1 className="page-title">My Submissions</h1>
             <p className="page-subtitle">Items you've submitted for resale</p>
           </div>
           <Link to="/sell" className="btn btn-primary">+ Submit New Item</Link>
         </div>
 
-        {/* Stats */}
         <div style={styles.statsGrid}>
           {[
             { label: "Total", value: stats.total, color: "var(--black)" },
@@ -107,7 +111,7 @@ export default function MyProductsPage() {
           <div className="loading-center"><div className="spinner" /></div>
         ) : products.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">📭</div>
+            <div className="empty-state-icon"><Icon name="box" size={52} color="var(--gray-400)" /></div>
             <div className="empty-state-title">No submissions yet</div>
             <div className="empty-state-text">Submit your first item for review</div>
             <Link to="/sell" className="btn btn-primary" style={{ marginTop: 16 }}>+ Submit Item</Link>
@@ -143,10 +147,10 @@ export default function MyProductsPage() {
                             </div>
                           </div>
                         </td>
-                        <td>₱{p.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
-                        <td>{p.negotiated_price ? <span style={{ color: "var(--green)", fontWeight: 600 }}>₱{p.negotiated_price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span> : <span style={{ color: "var(--gray-400)" }}>—</span>}</td>
+                        <td>PHP {p.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                        <td>{p.negotiated_price ? <span style={{ color: "var(--green)", fontWeight: 600 }}>PHP {p.negotiated_price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span> : <span style={{ color: "var(--gray-400)" }}>-</span>}</td>
                         <td>{p.condition}</td>
-                        <td style={{ fontSize: 12, color: "var(--gray-500)" }}>{p.location || "—"}</td>
+                        <td style={{ fontSize: 12, color: "var(--gray-500)" }}>{p.location || "-"}</td>
                         <td style={{ fontSize: 12, color: "var(--gray-500)" }}>{p.view_count || 0}</td>
                         <td>
                           <span className={`badge ${statusBadge[p.status]}`}>{statusLabel[p.status]}</span>

@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { productsAPI } from "../services/api";
-import { useToast } from "../components/Toast";
+import { alertError, alertSuccess, confirmAction } from "../utils/alerts";
 
 export default function SellPage() {
   const navigate = useNavigate();
-  const toast = useToast();
 
   const [categories, setCategories] = useState([]);
   const [sending, setSending] = useState(false);
@@ -41,7 +40,17 @@ export default function SellPage() {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.title.trim() || !form.price || !form.category_id || files.length === 0) {
-      toast("Please complete title, price, category, and at least one image.", "error");
+      await alertError("Please complete title, price, category, and at least one image.", "Missing required fields");
+      return;
+    }
+
+    const confirmed = await confirmAction({
+      title: "Submit this item for review?",
+      text: "Your item will be sent to admin for approval.",
+      confirmText: "Submit item",
+      confirmButtonColor: "#e11d48",
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -59,10 +68,10 @@ export default function SellPage() {
 
       await productsAPI.create(fd);
       localStorage.setItem("my_products_refresh", String(Date.now()));
-      toast("Item submitted for review.", "success");
+      await alertSuccess("Item submitted", "Your listing was sent for admin review.");
       navigate("/my-products");
     } catch (err) {
-      toast(err.message || "Submission failed", "error");
+      await alertError(err.message || "Submission failed");
     } finally {
       setSending(false);
     }

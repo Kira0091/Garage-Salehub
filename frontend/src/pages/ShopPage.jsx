@@ -1,8 +1,10 @@
-// src/pages/ShopPage.jsx
+﻿// src/pages/ShopPage.jsx
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { productsAPI } from "../services/api";
 import ProductCard from "../components/ProductCard";
+import Icon from "../components/Icon";
+import { categoryIconName } from "../utils/categoryIcons";
 
 export default function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -11,6 +13,9 @@ export default function ShopPage() {
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [isNarrow, setIsNarrow] = useState(
+    () => (typeof window !== "undefined" ? window.innerWidth < 980 : false)
+  );
 
   const page = parseInt(searchParams.get("page") || "1");
   const status = searchParams.get("status") || "approved";
@@ -28,6 +33,12 @@ export default function ShopPage() {
 
   useEffect(() => {
     productsAPI.categories().then(setCategories);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 980);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
@@ -77,9 +88,9 @@ export default function ShopPage() {
   return (
     <div className="page">
       <div className="container">
-        <div style={styles.layout}>
+        <div style={{ ...styles.layout, gridTemplateColumns: isNarrow ? "1fr" : "220px 1fr" }}>
           {/* Sidebar */}
-          <aside style={styles.sidebar}>
+          <aside style={{ ...styles.sidebar, position: isNarrow ? "static" : "sticky", top: isNarrow ? "auto" : 160 }}>
             <div className="card" style={{ padding: 20 }}>
               <h3 style={styles.filterTitle}>Categories</h3>
               <div style={styles.catList}>
@@ -87,7 +98,10 @@ export default function ShopPage() {
                   style={{ ...styles.catBtn, ...(category_id === "" ? styles.catBtnActive : {}) }}
                   onClick={() => updateParam("category_id", "")}
                 >
-                  📦 All Categories
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <Icon name="grid" size={14} />
+                    All Categories
+                  </span>
                 </button>
                 {categories.map((c) => (
                   <button
@@ -95,7 +109,9 @@ export default function ShopPage() {
                     style={{ ...styles.catBtn, ...(category_id === String(c.id) ? styles.catBtnActive : {}) }}
                     onClick={() => updateParam("category_id", c.id)}
                   >
-                    {c.icon} {c.name}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <Icon name={categoryIconName(c.name)} size={14} color="currentColor" /> {c.name}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -111,7 +127,7 @@ export default function ShopPage() {
                   <option>Fair</option>
                 </select>
                 <input className="input-field" placeholder="Location (e.g. Makati)" value={localLocation} onChange={(e) => setLocalLocation(e.target.value)} />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr", gap: 8 }}>
                   <input className="input-field" placeholder="Min Price" value={localMin} onChange={(e) => setLocalMin(e.target.value)} />
                   <input className="input-field" placeholder="Max Price" value={localMax} onChange={(e) => setLocalMax(e.target.value)} />
                 </div>
@@ -121,7 +137,7 @@ export default function ShopPage() {
                   <option value="price_desc">Price: High to Low</option>
                   <option value="views_desc">Most Viewed</option>
                 </select>
-                <button className="btn btn-outline" onClick={applyFilters}>Apply Filters</button>
+                <button className="btn btn-outline" style={{ width: "100%" }} onClick={applyFilters}>Apply Filters</button>
               </div>
             </div>
           </aside>
@@ -129,7 +145,7 @@ export default function ShopPage() {
           {/* Main */}
           <main style={styles.main}>
             {/* Search bar */}
-            <form onSubmit={handleSearch} style={styles.searchRow}>
+            <form onSubmit={handleSearch} style={{ ...styles.searchRow, flexWrap: isNarrow ? "wrap" : "nowrap" }}>
               <input
                 className="input-field"
                 style={{ flex: 1 }}
@@ -160,7 +176,7 @@ export default function ShopPage() {
               <div className="loading-center"><div className="spinner" /></div>
             ) : products.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-state-icon">🔍</div>
+                <div className="empty-state-icon"><Icon name="message" size={48} color="var(--gray-400)" /></div>
                 <div className="empty-state-title">No products found</div>
                 <div className="empty-state-text">Try different keywords or categories</div>
               </div>
@@ -194,7 +210,7 @@ export default function ShopPage() {
 }
 
 const styles = {
-  layout: { display: "grid", gridTemplateColumns: "220px 1fr", gap: 24, alignItems: "start" },
+  layout: { display: "grid", gap: 24, alignItems: "start" },
   sidebar: { position: "sticky", top: 160 },
   filterTitle: { fontSize: 16, fontWeight: 700, marginBottom: 14 },
   catList: { display: "flex", flexDirection: "column", gap: 4 },
@@ -207,3 +223,5 @@ const styles = {
   pageBtn: { width: 36, height: 36, borderRadius: 8, border: "1.5px solid var(--gray-200)", background: "white", cursor: "pointer", fontSize: 14, fontWeight: 600 },
   pageBtnActive: { background: "var(--red)", color: "white", border: "1.5px solid var(--red)" },
 };
+
+

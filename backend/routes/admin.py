@@ -1,11 +1,11 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from database import db, Product, User, Order, Category, Notification, Wishlist
+from auth_helpers import login_required, get_current_user_id
 
 admin_bp = Blueprint("admin", __name__)
 
 def require_admin():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     user = User.query.get(user_id)
     if not user or str(user.role).strip().lower() != "admin":
         return None, jsonify({"error": "Admin access required"}), 403
@@ -13,7 +13,7 @@ def require_admin():
 
 
 @admin_bp.route("/products/pending", methods=["GET"])
-@jwt_required()
+@login_required
 def pending_products():
     _, err, status = require_admin()
     if err:
@@ -23,7 +23,7 @@ def pending_products():
 
 
 @admin_bp.route("/products/inventory", methods=["GET"])
-@jwt_required()
+@login_required
 def inventory_products():
     _, err, status = require_admin()
     if err:
@@ -33,7 +33,7 @@ def inventory_products():
 
 
 @admin_bp.route("/products/<int:product_id>/approve", methods=["POST"])
-@jwt_required()
+@login_required
 def approve_product(product_id):
     _, err, status = require_admin()
     if err:
@@ -70,7 +70,7 @@ def approve_product(product_id):
 
 
 @admin_bp.route("/products/<int:product_id>/release", methods=["POST"])
-@jwt_required()
+@login_required
 def release_product(product_id):
     _, err, status = require_admin()
     if err:
@@ -92,7 +92,7 @@ def release_product(product_id):
 
 
 @admin_bp.route("/products/<int:product_id>/to-inventory", methods=["POST"])
-@jwt_required()
+@login_required
 def move_to_inventory(product_id):
     _, err, status = require_admin()
     if err:
@@ -114,7 +114,7 @@ def move_to_inventory(product_id):
 
 
 @admin_bp.route("/products/<int:product_id>/reject", methods=["POST"])
-@jwt_required()
+@login_required
 def reject_product(product_id):
     _, err, status = require_admin()
     if err:
@@ -137,7 +137,7 @@ def reject_product(product_id):
 
 
 @admin_bp.route("/dashboard", methods=["GET"])
-@jwt_required()
+@login_required
 def dashboard():
     _, err, status = require_admin()
     if err:
@@ -172,7 +172,7 @@ def dashboard():
 
 
 @admin_bp.route("/users", methods=["GET"])
-@jwt_required()
+@login_required
 def get_users():
     _, err, status = require_admin()
     if err:

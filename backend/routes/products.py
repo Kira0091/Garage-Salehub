@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app, send_from_directory
-from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from werkzeug.utils import secure_filename
 from database import db, Product, Category, User, Wishlist, Notification
+from auth_helpers import login_required, get_current_user_id
 import os, uuid
  
 
@@ -29,8 +29,7 @@ def get_products():
     # Only admins can query non-approved statuses
     if status != "approved":
         try:
-            verify_jwt_in_request(optional=True)
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id(optional=True)
             user = User.query.get(int(user_id)) if user_id else None
             if not user or user.role != "admin":
                 status = "approved"
@@ -84,9 +83,9 @@ def get_product(product_id):
 
 
 @products_bp.route("/", methods=["POST"])
-@jwt_required()
+@login_required
 def create_product():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     data = request.form
 
     images = []
@@ -116,9 +115,9 @@ def create_product():
 
 
 @products_bp.route("/<int:product_id>", methods=["PUT"])
-@jwt_required()
+@login_required
 def update_product(product_id):
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     product = Product.query.get_or_404(product_id)
     user = User.query.get(user_id)
 
@@ -155,9 +154,9 @@ def update_product(product_id):
 
 
 @products_bp.route("/<int:product_id>", methods=["DELETE"])
-@jwt_required()
+@login_required
 def delete_product(product_id):
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     product = Product.query.get_or_404(product_id)
     user = User.query.get(user_id)
 
@@ -170,9 +169,9 @@ def delete_product(product_id):
 
 
 @products_bp.route("/my", methods=["GET"])
-@jwt_required()
+@login_required
 def my_products():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     products = Product.query.filter_by(seller_id=user_id).order_by(Product.created_at.desc()).all()
     return jsonify([p.to_dict() for p in products]), 200
 
@@ -184,9 +183,9 @@ def get_categories():
 
 
 @products_bp.route("/categories", methods=["POST"])
-@jwt_required()
+@login_required
 def create_category():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     user = User.query.get(user_id)
     if user.role != "admin":
         return jsonify({"error": "Admin only"}), 403

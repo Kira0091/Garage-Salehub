@@ -1,22 +1,22 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from database import db, Wishlist, Product, Notification
+from auth_helpers import login_required, get_current_user_id
 
 wishlist_bp = Blueprint("wishlist", __name__)
 
 
 @wishlist_bp.route("/", methods=["GET"])
-@jwt_required()
+@login_required
 def get_wishlist():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     items = Wishlist.query.filter_by(user_id=user_id).order_by(Wishlist.created_at.desc()).all()
     return jsonify([w.to_dict() for w in items]), 200
 
 
 @wishlist_bp.route("/", methods=["POST"])
-@jwt_required()
+@login_required
 def add_to_wishlist():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     data = request.get_json() or {}
     product_id = data.get("product_id")
     target_price = data.get("target_price")
@@ -53,9 +53,9 @@ def add_to_wishlist():
 
 
 @wishlist_bp.route("/<int:product_id>", methods=["DELETE"])
-@jwt_required()
+@login_required
 def remove_from_wishlist(product_id):
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     item = Wishlist.query.filter_by(user_id=user_id, product_id=product_id).first()
     if not item:
         return jsonify({"error": "Not found"}), 404

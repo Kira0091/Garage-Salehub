@@ -89,7 +89,7 @@ input, textarea, select { font-family: inherit; }
   padding: 10px 14px; border: 1.5px solid var(--gray-200);
   border-radius: var(--radius); font-size: 14px; outline: none;
   transition: border-color var(--transition);
-  background: white; color: var(--black);
+  background: white; color: var(--black); width: 100%;
 }
 .input-field:focus { border-color: var(--red); }
 

@@ -1,7 +1,9 @@
+﻿// src/pages/NotificationsPage.jsx
 import { useEffect, useState } from "react";
 import { notificationsAPI } from "../services/api";
 import { useToast } from "../components/Toast";
 import { Link } from "react-router-dom";
+import Icon from "../components/Icon";
 
 export default function NotificationsPage() {
   const [notes, setNotes] = useState([]);
@@ -65,7 +67,7 @@ export default function NotificationsPage() {
           <div className="loading-center"><div className="spinner" /></div>
         ) : notes.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-state-icon">🔔</div>
+            <div className="empty-state-icon"><Icon name="bell" size={48} color="var(--gray-400)" /></div>
             <div className="empty-state-title">No notifications</div>
             <div className="empty-state-text">You're all caught up.</div>
           </div>

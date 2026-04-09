@@ -4,6 +4,8 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { notificationsAPI } from "../services/api";
+import { alertError, alertSuccess, confirmAction } from "../utils/alerts";
+import Icon from "./Icon";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -13,6 +15,9 @@ export default function Navbar() {
   const [search, setSearch] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const displayName = String(user?.name || user?.full_name || user?.username || "User").trim() || "User";
+  const firstName = displayName.split(" ")[0] || "User";
+  const avatarInitial = displayName.charAt(0).toUpperCase() || "U";
 
   useEffect(() => {
     const readCount = () => {
@@ -50,25 +55,25 @@ export default function Navbar() {
     if (search.trim()) navigate(`/shop?search=${encodeURIComponent(search.trim())}`);
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate("/");
-    setUserMenuOpen(false);
+  const handleLogout = async () => {
+    const confirmed = await confirmAction({
+      title: "Log out now?",
+      text: "You will need to sign in again to continue.",
+      confirmText: "Log out",
+    });
+    if (!confirmed) return;
+    try {
+      await logout();
+      await alertSuccess("Logged out", "You have been signed out.");
+      navigate("/");
+      setUserMenuOpen(false);
+    } catch (e) {
+      await alertError(e?.message || "Logout failed");
+    }
   };
 
   return (
     <header style={styles.header}>
-      <div style={styles.topBar}>
-        <div className="container" style={styles.topBarInner}>
-          <span style={styles.topBarText}>
-            {isAdminDashboard ? "Admin Dashboard" : "Tell a friend about GarageSaleHub & get 10% off your next order"}
-          </span>
-          <div style={styles.topBarRight}>
-            {user && <span style={styles.topBarText}>Hi, {user.name.split(" ")[0]}!</span>}
-          </div>
-        </div>
-      </div>
-
       <div style={styles.mainNav}>
         <div className="container" style={styles.mainNavInner}>
           <Link to={logoTarget} style={styles.logo}>
@@ -97,8 +102,8 @@ export default function Navbar() {
             ) : (
               <div style={{ position: "relative" }}>
                 <button className="navbar-user-btn" style={styles.userBtn} onClick={() => setUserMenuOpen(!userMenuOpen)}>
-                  <div style={styles.avatar}>{user.name[0].toUpperCase()}</div>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{user.name.split(" ")[0]}</span>
+                  <div style={styles.avatar}>{avatarInitial}</div>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{firstName}</span>
                   <span>v</span>
                 </button>
                 {userMenuOpen && (
@@ -135,7 +140,7 @@ export default function Navbar() {
             )}
             {user && !isAdminDashboard && (
               <Link to="/notifications" style={styles.iconBtn} aria-label="Notifications">
-                🔔
+                <Icon name="bell" size={16} />
                 {notifCount > 0 && <span style={styles.cartBadge}>{notifCount}</span>}
               </Link>
             )}
@@ -161,10 +166,6 @@ export default function Navbar() {
 
 const styles = {
   header: { background: "white", borderBottom: "1px solid var(--gray-200)", position: "sticky", top: 0, zIndex: 100, boxShadow: "var(--shadow-sm)" },
-  topBar: { background: "var(--red)", padding: "6px 0" },
-  topBarInner: { display: "flex", justifyContent: "space-between", alignItems: "center" },
-  topBarText: { fontSize: 12, color: "white" },
-  topBarRight: { display: "flex", alignItems: "center", gap: 16 },
   mainNav: { padding: "12px 0" },
   mainNavInner: { display: "flex", alignItems: "center", gap: 20 },
   logo: { display: "flex", alignItems: "center", gap: 10, textDecoration: "none", flexShrink: 0 },

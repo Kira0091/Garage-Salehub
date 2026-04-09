@@ -2,8 +2,9 @@
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { adminAPI, ordersAPI, productsAPI, chatAPI } from "../services/api";
-import { useToast } from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
+import { alertError, alertInfo, alertSuccess, confirmAction } from "../utils/alerts";
+import Icon from "../components/Icon";
 
 const TABS = ["Dashboard", "Pending Items", "All Products", "Orders", "Users", "Messages"];
 
@@ -26,7 +27,6 @@ export default function AdminPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [conversations, setConversations] = useState([]);
   const [convLoading, setConvLoading] = useState(false);
-  const toast = useToast();
   const admin = String(user?.role || "").trim().toLowerCase() === "admin";
 
   if (authLoading) return <div className="loading-center"><div className="spinner" /></div>;
@@ -58,60 +58,96 @@ export default function AdminPage() {
   }, [tab]);
 
   const handleApprove = async (product) => {
+    const confirmed = await confirmAction({
+      title: "Approve this product?",
+      text: `${product.title} will move to approved listings.`,
+      confirmText: "Approve",
+      confirmButtonColor: "#16a34a",
+    });
+    if (!confirmed) return;
     try {
       await adminAPI.approveProduct(product.id, {});
       setPendingProducts((prev) => prev.filter((p) => p.id !== product.id));
       setDashboard((d) => ({ ...d, stats: { ...d.stats, pending_products: d.stats.pending_products - 1, approved_products: d.stats.approved_products + 1 } }));
-      toast("Product approved!", "success");
+      await alertSuccess("Product approved", `${product.title} is now approved.`);
     } catch (e) {
-      toast(e.message, "error");
+      await alertError(e.message || "Approve failed");
     }
   };
 
   const handleReject = async (id) => {
+    const product = pendingProducts.find((p) => p.id === id);
+    const confirmed = await confirmAction({
+      title: "Reject this product?",
+      text: product ? `${product.title} will be marked rejected.` : "This item will be marked rejected.",
+      confirmText: "Reject",
+    });
+    if (!confirmed) return;
     try {
       await adminAPI.rejectProduct(id, { reason: rejectReason || "Item did not meet quality standards" });
       setPendingProducts((prev) => prev.filter((p) => p.id !== id));
       setDashboard((d) => ({ ...d, stats: { ...d.stats, pending_products: d.stats.pending_products - 1 } }));
-      toast("Product rejected", "info");
+      await alertInfo("Product rejected", "The seller has been notified.");
       setRejectModal(null);
       setRejectReason("");
     } catch (e) {
-      toast(e.message, "error");
+      await alertError(e.message || "Reject failed");
     }
   };
 
   const handleRelease = async (id) => {
+    const product = inventoryProducts.find((p) => p.id === id);
+    const confirmed = await confirmAction({
+      title: "Release product to marketplace?",
+      text: product ? `${product.title} will become visible in Shop.` : "This item will become visible in Shop.",
+      confirmText: "Release",
+      confirmButtonColor: "#16a34a",
+    });
+    if (!confirmed) return;
     try {
       const released = await adminAPI.releaseProduct(id);
       setInventoryProducts((prev) => prev.filter((p) => p.id !== id));
       setApprovedProducts((prev) => [released, ...prev]);
-      toast("Product released to marketplace", "success");
+      await alertSuccess("Released", "Product is now live in marketplace.");
       setDashboard((d) => ({ ...d, stats: { ...d.stats, inventory_products: d.stats.inventory_products - 1, approved_products: d.stats.approved_products + 1 } }));
     } catch (e) {
-      toast(e.message, "error");
+      await alertError(e.message || "Release failed");
     }
   };
 
   const handleMoveToInventory = async (id) => {
+    const product = approvedProducts.find((p) => p.id === id);
+    const confirmed = await confirmAction({
+      title: "Move product back to inventory?",
+      text: product ? `${product.title} will be removed from live listings.` : "This item will be removed from live listings.",
+      confirmText: "Move",
+    });
+    if (!confirmed) return;
     try {
       const moved = await adminAPI.moveToInventory(id);
       setApprovedProducts((prev) => prev.filter((p) => p.id !== id));
       setInventoryProducts((prev) => [moved, ...prev]);
-      toast("Product moved back to inventory", "info");
+      await alertInfo("Moved to inventory", "Product is no longer live in Shop.");
       setDashboard((d) => ({ ...d, stats: { ...d.stats, inventory_products: d.stats.inventory_products + 1, approved_products: d.stats.approved_products - 1 } }));
     } catch (e) {
-      toast(e.message, "error");
+      await alertError(e.message || "Move failed");
     }
   };
 
   const handleOrderStatus = async (id, status) => {
+    const confirmed = await confirmAction({
+      title: "Update order status?",
+      text: `Set this order status to "${status}"?`,
+      confirmText: "Update",
+      confirmButtonColor: "#2563eb",
+    });
+    if (!confirmed) return;
     try {
       const updated = await ordersAPI.updateStatus(id, { status });
       setAllOrders((prev) => prev.map((o) => (o.id === id ? updated : o)));
-      toast(`Order status updated to ${status}`, "success");
+      await alertSuccess("Order updated", `Status changed to ${status}.`);
     } catch (e) {
-      toast(e.message, "error");
+      await alertError(e.message || "Status update failed");
     }
   };
 
@@ -167,7 +203,7 @@ export default function AdminPage() {
                 { label: "Inventory", value: dashboard.stats.inventory_products, icon: "tag", color: "var(--blue)" },
                 { label: "Approved", value: dashboard.stats.approved_products, icon: "check", color: "var(--green)" },
                 { label: "Total Orders", value: dashboard.stats.total_orders, icon: "cart", color: "var(--blue)" },
-                { label: "Revenue (Paid)", value: `₱${dashboard.stats.total_revenue.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, icon: "wallet", color: "var(--red)" },
+                { label: "Revenue (Paid)", value: `PHP ${dashboard.stats.total_revenue.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, icon: "wallet", color: "var(--red)" },
               ].map((s) => (
                 <div key={s.label} className="card" style={{ padding: 20 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -185,14 +221,16 @@ export default function AdminPage() {
                 {dashboard.recent_orders.map((o) => (
                   <div key={o.id} style={styles.miniRow}>
                     <span style={{ fontSize: 13 }}>Order #{o.id} — {o.buyer.name}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--red)" }}>₱{o.total_amount.toLocaleString("en-PH", { maximumFractionDigits: 0 })}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--red)" }}>PHP {o.total_amount.toLocaleString("en-PH", { maximumFractionDigits: 0 })}</span>
                   </div>
                 ))}
               </div>
               <div className="card" style={{ padding: 20 }}>
                 <h3 style={{ fontSize: 16, marginBottom: 16 }}>Items Awaiting Review</h3>
                 {dashboard.pending_products.length === 0 ? (
-                  <p style={{ fontSize: 13, color: "var(--gray-400)" }}>All caught up! ✓</p>
+                  <p style={{ fontSize: 13, color: "var(--gray-400)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    All caught up! <Icon name="check-circle" size={14} color="var(--green)" />
+                  </p>
                 ) : dashboard.pending_products.map((p) => (
                   <div key={p.id} style={styles.miniRow}>
                     <span style={{ fontSize: 13 }}>{p.title}</span>
@@ -234,7 +272,7 @@ export default function AdminPage() {
                         <h3 style={{ fontSize: 16 }}>{p.title}</h3>
                         <p style={{ fontSize: 13, color: "var(--gray-500)", margin: "6px 0" }}>{p.description}</p>
                         <div style={{ display: "flex", gap: 12, fontSize: 13, flexWrap: "wrap" }}>
-                          <span><strong>Asking Price:</strong> ₱{p.price.toLocaleString("en-PH")}</span>
+                          <span><strong>Asking Price:</strong> PHP {p.price.toLocaleString("en-PH")}</span>
                           <span><strong>Condition:</strong> {p.condition}</span>
                           <span><strong>Qty:</strong> {p.quantity}</span>
                           <span><strong>Seller:</strong> {p.seller.name}</span>
@@ -255,14 +293,14 @@ export default function AdminPage() {
                           className="btn btn-primary"
                           onClick={() => handleApprove(p)}
                         >
-                          ✅ Approve
+                          <Icon name="check-circle" size={14} color="currentColor" /> Approve
                         </button>
                         <button
                           className="btn btn-sm"
                           style={{ background: "#fee2e2", color: "var(--red)", border: "none" }}
                           onClick={() => setRejectModal(p)}
                         >
-                          ❌ Reject
+                          <Icon name="x-circle" size={14} color="currentColor" /> Reject
                         </button>
                       </div>
                     </div>
@@ -288,7 +326,7 @@ export default function AdminPage() {
                     <tr key={o.id}>
                       <td>#{o.id}</td>
                       <td>{o.buyer.name}</td>
-                      <td style={{ fontWeight: 700 }}>₱{o.total_amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                      <td style={{ fontWeight: 700 }}>PHP {o.total_amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
                       <td><span className={`badge ${o.payment_status === "paid" ? "badge-green" : "badge-yellow"}`}>{o.payment_status}</span></td>
                       <td><span className="badge badge-blue">{o.status}</span></td>
                       <td style={{ fontSize: 12 }}>{new Date(o.created_at).toLocaleDateString("en-PH")}</td>
@@ -329,7 +367,7 @@ export default function AdminPage() {
                       <div>
                         <div style={{ fontWeight: 700 }}>{p.title}</div>
                         <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
-                          Final Price: ₱{(p.negotiated_price || p.price).toLocaleString("en-PH")}
+                          Final Price: PHP {(p.negotiated_price || p.price).toLocaleString("en-PH")}
                         </div>
                       </div>
                       <button className="btn btn-primary btn-sm" onClick={() => handleRelease(p.id)}>
@@ -355,7 +393,7 @@ export default function AdminPage() {
                       <div>
                         <div style={{ fontWeight: 700 }}>{p.title}</div>
                         <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
-                          Price: ₱{(p.negotiated_price || p.price).toLocaleString("en-PH")}
+                          Price: PHP {(p.negotiated_price || p.price).toLocaleString("en-PH")}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -447,7 +485,9 @@ export default function AdminPage() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Reject Item</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setRejectModal(null)}>✕</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setRejectModal(null)} aria-label="Close reject modal">
+                <Icon name="x-circle" size={16} color="currentColor" />
+              </button>
             </div>
             <div className="modal-body">
               <div className="input-group" style={{ marginBottom: 16 }}>
