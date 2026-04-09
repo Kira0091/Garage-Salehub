@@ -96,27 +96,27 @@ export default function Navbar() {
               </>
             ) : (
               <div style={{ position: "relative" }}>
-                <button style={styles.userBtn} onClick={() => setUserMenuOpen(!userMenuOpen)}>
+                <button className="navbar-user-btn" style={styles.userBtn} onClick={() => setUserMenuOpen(!userMenuOpen)}>
                   <div style={styles.avatar}>{user.name[0].toUpperCase()}</div>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{user.name.split(" ")[0]}</span>
                   <span>v</span>
                 </button>
                 {userMenuOpen && (
-                  <div style={styles.dropdown}>
-                  <Link to="/profile" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Profile</Link>
-                  <Link to="/my-products" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Submissions</Link>
-                  <Link to="/seller-dashboard" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Seller Dashboard</Link>
-                  <Link to="/orders" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Orders</Link>
-                  <Link to="/chat" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Messages</Link>
-                  <Link to="/wishlist" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Wishlist</Link>
-                  <Link to="/notifications" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Notifications</Link>
-                    {String(user.role || "").toLowerCase() === "admin" && (
-                      <Link to="/admin" style={{ ...styles.dropdownItem, color: "var(--red)" }} onClick={() => setUserMenuOpen(false)}>
-                        Admin Panel
-                      </Link>
+                  <div className="navbar-dropdown" style={styles.dropdown}>
+                    {String(user.role || "").toLowerCase() !== "admin" && (
+                      <>
+                        <Link className="navbar-dropdown-item" to="/profile" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Profile</Link>
+                        <Link className="navbar-dropdown-item" to="/my-products" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Submissions</Link>
+                        <Link className="navbar-dropdown-item" to="/seller-dashboard" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Seller Dashboard</Link>
+                        <Link className="navbar-dropdown-item" to="/orders" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Orders</Link>
+                        <Link className="navbar-dropdown-item" to="/chat" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Messages</Link>
+                        <Link className="navbar-dropdown-item" to="/wishlist" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Wishlist</Link>
+                        <Link className="navbar-dropdown-item" to="/notifications" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Notifications</Link>
+                      </>
                     )}
                     <div style={styles.dropdownDivider} />
                     <button
+                      className="navbar-dropdown-item"
                       style={{ ...styles.dropdownItem, width: "100%", textAlign: "left", background: "none", border: "none" }}
                       onClick={handleLogout}
                     >

@@ -1,5 +1,5 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
 import { ToastProvider } from "./components/Toast";
@@ -33,9 +33,17 @@ function ProtectedRoute({ children, adminOnly = false }) {
 }
 
 function AppRoutes() {
+  const { user } = useAuth();
+  const location = useLocation();
+  const adminUser = String(user?.role || "").trim().toLowerCase() === "admin";
+  const fromAdminChat =
+    location.pathname === "/chat" &&
+    adminUser &&
+    new URLSearchParams(location.search).get("from") === "admin";
+
   return (
     <>
-      <Navbar />
+      {!fromAdminChat && <Navbar />}
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/shop" element={<ShopPage />} />
@@ -55,7 +63,7 @@ function AppRoutes() {
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-      <Footer />
+      {!fromAdminChat && <Footer />}
     </>
   );
 }

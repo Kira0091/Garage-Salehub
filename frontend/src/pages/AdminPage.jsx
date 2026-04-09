@@ -1,6 +1,6 @@
 // src/pages/AdminPage.jsx
 import { useState, useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { adminAPI, ordersAPI, productsAPI, chatAPI } from "../services/api";
 import { useToast } from "../components/Toast";
 import { useAuth } from "../context/AuthContext";
@@ -9,8 +9,12 @@ const TABS = ["Dashboard", "Pending Items", "All Products", "Orders", "Users", "
 
 export default function AdminPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
-  const [tab, setTab] = useState("Dashboard");
+  const initialTab = TABS.find(
+    (t) => t.toLowerCase() === String(searchParams.get("tab") || "").trim().toLowerCase()
+  ) || "Dashboard";
+  const [tab, setTab] = useState(initialTab);
   const [dashboard, setDashboard] = useState(null);
   const [pendingProducts, setPendingProducts] = useState([]);
   const [inventoryProducts, setInventoryProducts] = useState([]);
@@ -114,7 +118,7 @@ export default function AdminPage() {
   const openMessage = (partner) => {
     if (!partner?.id) return;
     const name = encodeURIComponent(partner.name || "User");
-    navigate(`/chat?partner=${partner.id}&name=${name}&role=user`);
+    navigate(`/chat?partner=${partner.id}&name=${name}&role=user&from=admin`);
   };
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>;
@@ -122,8 +126,17 @@ export default function AdminPage() {
   return (
     <div className="page">
       <div className="container">
+        <div style={styles.adminWorkspace}>
         <div className="page-header">
-          <h1 className="page-title">⚙️ Admin Panel</h1>
+          <h1 className="page-title" style={styles.adminTitleRow}>
+            <span style={styles.adminTitleIcon} aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+                <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1.8 1.8 0 1 1-2.6 2.6l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1.8 1.8 0 1 1-3.6 0v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1.8 1.8 0 1 1-2.6-2.6l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1.8 1.8 0 1 1 0-3.6h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1.8 1.8 0 1 1 2.6-2.6l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1.8 1.8 0 1 1 3.6 0v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1.8 1.8 0 1 1 2.6 2.6l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6h.2a1.8 1.8 0 1 1 0 3.6h-.2a1 1 0 0 0-.9.6Z" />
+              </svg>
+            </span>
+            <span>Admin Panel</span>
+          </h1>
           <p className="page-subtitle">GarageSaleHub Management Dashboard</p>
         </div>
 
@@ -148,17 +161,17 @@ export default function AdminPage() {
           <div className="fade-in">
             <div style={styles.statsGrid}>
               {[
-                { label: "Total Users", value: dashboard.stats.total_users, icon: "👥", color: "var(--blue)" },
-                { label: "Total Products", value: dashboard.stats.total_products, icon: "📦", color: "var(--black)" },
-                { label: "Pending Review", value: dashboard.stats.pending_products, icon: "⏳", color: "var(--yellow)" },
-                { label: "Inventory", value: dashboard.stats.inventory_products, icon: "🏷️", color: "var(--blue)" },
-                { label: "Approved", value: dashboard.stats.approved_products, icon: "✅", color: "var(--green)" },
-                { label: "Total Orders", value: dashboard.stats.total_orders, icon: "🛍️", color: "var(--blue)" },
-                { label: "Revenue (Paid)", value: `₱${dashboard.stats.total_revenue.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, icon: "💰", color: "var(--red)" },
+                { label: "Total Users", value: dashboard.stats.total_users, icon: "users", color: "var(--blue)" },
+                { label: "Total Products", value: dashboard.stats.total_products, icon: "box", color: "var(--black)" },
+                { label: "Pending Review", value: dashboard.stats.pending_products, icon: "hourglass", color: "var(--yellow)" },
+                { label: "Inventory", value: dashboard.stats.inventory_products, icon: "tag", color: "var(--blue)" },
+                { label: "Approved", value: dashboard.stats.approved_products, icon: "check", color: "var(--green)" },
+                { label: "Total Orders", value: dashboard.stats.total_orders, icon: "cart", color: "var(--blue)" },
+                { label: "Revenue (Paid)", value: `₱${dashboard.stats.total_revenue.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, icon: "wallet", color: "var(--red)" },
               ].map((s) => (
                 <div key={s.label} className="card" style={{ padding: 20 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <span style={{ fontSize: 28 }}>{s.icon}</span>
+                    <StatCardIcon type={s.icon} />
                   </div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: "Syne" }}>{s.value}</div>
                   <div style={{ fontSize: 12, color: "var(--gray-500)", fontWeight: 600, marginTop: 2 }}>{s.label}</div>
@@ -196,7 +209,14 @@ export default function AdminPage() {
           <div className="fade-in">
             {pendingProducts.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-state-icon">✅</div>
+                <div className="empty-state-icon">
+                  <span style={styles.emptyStateIconBadge} aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+                    </svg>
+                  </span>
+                </div>
                 <div className="empty-state-title">No pending items</div>
                 <div className="empty-state-text">All submissions have been reviewed</div>
               </div>
@@ -418,6 +438,7 @@ export default function AdminPage() {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Reject Modal */}
@@ -447,8 +468,68 @@ export default function AdminPage() {
   );
 }
 
+function StatCardIcon({ type }) {
+  const base = { width: 20, height: 20, fill: "none", stroke: "#334155", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
+  const iconStyle = {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#e2e8f0",
+    border: "1px solid #cbd5e1",
+  };
+
+  const icons = {
+    users: <svg viewBox="0 0 24 24" style={base}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="3" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a3 3 0 0 1 0 5.74" /></svg>,
+    box: <svg viewBox="0 0 24 24" style={base}><path d="m21 8-9-5-9 5 9 5 9-5Z" /><path d="m3 8 9 5 9-5" /><path d="M12 13v8" /></svg>,
+    hourglass: <svg viewBox="0 0 24 24" style={base}><path d="M6 2h12" /><path d="M6 22h12" /><path d="M8 2c0 4 2 6 4 8 2-2 4-4 4-8" /><path d="M8 22c0-4 2-6 4-8 2 2 4 4 4 8" /></svg>,
+    tag: <svg viewBox="0 0 24 24" style={base}><path d="M20.6 13.4 11 3.8A2 2 0 0 0 9.6 3H4v5.6a2 2 0 0 0 .8 1.4l9.6 9.6a2 2 0 0 0 2.8 0l3.4-3.4a2 2 0 0 0 0-2.8Z" /><circle cx="7.5" cy="7.5" r="1.2" /></svg>,
+    check: <svg viewBox="0 0 24 24" style={base}><circle cx="12" cy="12" r="9" /><path d="m8.5 12.5 2.5 2.5 4.5-5" /></svg>,
+    cart: <svg viewBox="0 0 24 24" style={base}><circle cx="9" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L21 7H7" /></svg>,
+    wallet: <svg viewBox="0 0 24 24" style={base}><path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z" /><path d="M16 12h5" /><circle cx="16" cy="12" r="1" /></svg>,
+  };
+
+  return <span style={iconStyle}>{icons[type] || icons.box}</span>;
+}
+
 const styles = {
-  tabs: { display: "flex", gap: 4, marginBottom: 24, borderBottom: "2px solid var(--gray-200)", paddingBottom: 0 },
+  adminTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+  adminTitleIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#e2e8f0",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
+    flexShrink: 0,
+  },
+  adminWorkspace: {
+    background: "#f1f5f9",
+    border: "1px solid #dbe3ec",
+    borderRadius: 14,
+    padding: 22,
+  },
+  emptyStateIconBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "#e2e8f0",
+    color: "#334155",
+    border: "1px solid #cbd5e1",
+  },
+  tabs: { display: "flex", gap: 4, marginBottom: 24, borderBottom: "2px solid #d4dde7", paddingBottom: 0 },
   tab: { padding: "10px 20px", background: "none", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "var(--gray-500)", borderBottom: "2px solid transparent", marginBottom: -2, display: "flex", alignItems: "center", gap: 6 },
   tabActive: { color: "var(--red)", borderBottomColor: "var(--red)" },
   tabBadge: { background: "var(--red)", color: "white", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 },

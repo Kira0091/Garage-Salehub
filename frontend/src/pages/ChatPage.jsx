@@ -43,6 +43,8 @@ export default function ChatPage() {
   const toast = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isAdmin = String(user?.role || "").trim().toLowerCase() === "admin";
+  const fromAdminPanel = isAdmin && searchParams.get("from") === "admin";
 
   const [conversations, setConversations] = useState([]);
   const [selectedPartner, setSelectedPartner] = useState(null);
@@ -314,10 +316,18 @@ export default function ChatPage() {
   // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <div className="page" style={{ paddingBottom: 0 }}>
-      <div className="container" style={{ height: "calc(100vh - 130px)", display: "flex", flexDirection: "column" }}>
+      <div
+        className="container"
+        style={{
+          height: fromAdminPanel ? "calc(100vh - 64px)" : "calc(100vh - 130px)",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
 
         <div style={S.header}>
-          <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div>
             <h1 className="page-title" style={{ fontSize: 22 }}>
               {user.role === "admin" ? "Seller Negotiations" : "Chat with Admin"}
             </h1>
@@ -326,6 +336,12 @@ export default function ChatPage() {
                 ? "Review submissions, request photos, and negotiate prices with sellers"
                 : "Submit your item, send photos/videos, and negotiate pricing directly here"}
             </p>
+            </div>
+            {fromAdminPanel && (
+              <button className="btn btn-ghost btn-sm" onClick={() => navigate("/admin?tab=Messages")}>
+                Back to Admin
+              </button>
+            )}
           </div>
         </div>
 
@@ -879,7 +895,6 @@ const S = {
   },
   uploadBox: { border: "2px dashed var(--gray-300)", borderRadius: 10, cursor: "pointer", minHeight: 80, transition: "border-color 0.15s" },
 };
-
 
 
 
