@@ -1,12 +1,16 @@
 // src/components/ProductCard.jsx
 import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
-import { productsAPI } from "../services/api";
+import { productsAPI, wishlistAPI } from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "./Toast";
 
 const conditionColor = { "Like New": "var(--green)", "Good": "var(--blue)", "Fair": "var(--yellow)" };
 
 export default function ProductCard({ product }) {
   const { addToCart } = useCart();
+  const { user } = useAuth();
+  const toast = useToast();
   const price = product.negotiated_price || product.price;
   const hasDiscount = product.negotiated_price && product.negotiated_price < product.price;
   const imgSrc = product.images?.[0]
@@ -44,16 +48,40 @@ export default function ProductCard({ product }) {
           )}
         </div>
 
-        <div style={styles.seller}>By {product.seller?.name}</div>
+        <div style={styles.seller}>
+          By {product.seller?.name}
+          {product.seller?.rating_avg && (
+            <span style={styles.rating}>★ {product.seller.rating_avg} ({product.seller.rating_count || 0})</span>
+          )}
+        </div>
 
-        <button
-          className="btn btn-primary"
-          style={{ width: "100%", marginTop: 10 }}
-          disabled={product.stock === 0}
-          onClick={() => addToCart(product)}
-        >
-          {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
-        </button>
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button
+            className="btn btn-primary"
+            style={{ flex: 1 }}
+            disabled={product.stock === 0}
+            onClick={() => addToCart(product)}
+          >
+            {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
+          </button>
+          {user && (
+            <button
+              className="btn btn-ghost"
+              style={{ padding: "0 10px" }}
+              title="Save to wishlist"
+              onClick={async () => {
+                try {
+                  await wishlistAPI.add({ product_id: product.id });
+                  toast("Saved to wishlist", "success");
+                } catch (e) {
+                  toast(e.message || "Wishlist update failed", "error");
+                }
+              }}
+            >
+              ♡
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -72,5 +100,6 @@ const styles = {
   priceRow: { display: "flex", alignItems: "center", gap: 8 },
   price: { fontSize: 18, fontWeight: 800, color: "var(--red)", fontFamily: "Syne, sans-serif" },
   originalPrice: { fontSize: 13, color: "var(--gray-400)", textDecoration: "line-through" },
-  seller: { fontSize: 12, color: "var(--gray-400)", marginTop: 4 },
+  seller: { fontSize: 12, color: "var(--gray-400)", marginTop: 4, display: "flex", gap: 8, alignItems: "center" },
+  rating: { fontSize: 11, color: "var(--green)", fontWeight: 700 },
 };

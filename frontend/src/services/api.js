@@ -96,14 +96,56 @@ export const chatAPI = {
   attachmentUrl: (filename) => `${BASE_URL}/chat/attachments/${filename}`,
 };
 
+// Wishlist
+export const wishlistAPI = {
+  getAll: () =>
+    fetch(`${BASE_URL}/wishlist/`, { headers: getHeaders() }).then(handleResponse),
+  add: (body) =>
+    fetch(`${BASE_URL}/wishlist/`, { method: "POST", headers: getHeaders(), body: JSON.stringify(body) }).then(handleResponse),
+  remove: (productId) =>
+    fetch(`${BASE_URL}/wishlist/${productId}`, { method: "DELETE", headers: getHeaders() }).then(handleResponse),
+};
+
+// Notifications
+export const notificationsAPI = {
+  getAll: () =>
+    fetch(`${BASE_URL}/notifications/`, { headers: getHeaders() }).then(handleResponse),
+  markRead: (id) =>
+    fetch(`${BASE_URL}/notifications/${id}/read`, { method: "PUT", headers: getHeaders() }).then(handleResponse),
+  markAllRead: () =>
+    fetch(`${BASE_URL}/notifications/read-all`, { method: "PUT", headers: getHeaders() }).then(handleResponse),
+};
+
+// Reviews
+export const reviewsAPI = {
+  create: (body) =>
+    fetch(`${BASE_URL}/reviews/`, { method: "POST", headers: getHeaders(), body: JSON.stringify(body) }).then(handleResponse),
+  seller: (sellerId) =>
+    fetch(`${BASE_URL}/reviews/seller/${sellerId}`).then(handleResponse),
+  mine: () =>
+    fetch(`${BASE_URL}/reviews/me`, { headers: getHeaders() }).then(handleResponse),
+};
+
+// User analytics
+export const usersAPI = {
+  analytics: () =>
+    fetch(`${BASE_URL}/users/me/analytics`, { headers: getHeaders() }).then(handleResponse),
+};
+
 // Admin
 export const adminAPI = {
   dashboard: () =>
     fetch(`${BASE_URL}/admin/dashboard`, { headers: getHeaders() }).then(handleResponse),
   pendingProducts: () =>
     fetch(`${BASE_URL}/admin/products/pending`, { headers: getHeaders() }).then(handleResponse),
+  inventoryProducts: () =>
+    fetch(`${BASE_URL}/admin/products/inventory`, { headers: getHeaders() }).then(handleResponse),
   approveProduct: (id, body = {}) =>
     fetch(`${BASE_URL}/admin/products/${id}/approve`, { method: "POST", headers: getHeaders(), body: JSON.stringify(body) }).then(handleResponse),
+  releaseProduct: (id) =>
+    fetch(`${BASE_URL}/admin/products/${id}/release`, { method: "POST", headers: getHeaders() }).then(handleResponse),
+  moveToInventory: (id) =>
+    fetch(`${BASE_URL}/admin/products/${id}/to-inventory`, { method: "POST", headers: getHeaders() }).then(handleResponse),
   rejectProduct: (id, body = {}) =>
     fetch(`${BASE_URL}/admin/products/${id}/reject`, { method: "POST", headers: getHeaders(), body: JSON.stringify(body) }).then(handleResponse),
   getUsers: () =>
@@ -111,5 +153,3 @@ export const adminAPI = {
   getAllOrders: () =>
     fetch(`${BASE_URL}/orders/`, { headers: getHeaders() }).then(handleResponse),
 };
-
-

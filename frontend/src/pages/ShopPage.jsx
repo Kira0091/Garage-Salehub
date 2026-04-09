@@ -13,23 +13,44 @@ export default function ShopPage() {
   const [loading, setLoading] = useState(true);
 
   const page = parseInt(searchParams.get("page") || "1");
+  const status = searchParams.get("status") || "approved";
   const search = searchParams.get("search") || "";
   const category_id = searchParams.get("category_id") || "";
+  const min_price = searchParams.get("min_price") || "";
+  const max_price = searchParams.get("max_price") || "";
+  const condition = searchParams.get("condition") || "";
+  const location = searchParams.get("location") || "";
+  const sort = searchParams.get("sort") || "newest";
   const [localSearch, setLocalSearch] = useState(search);
+  const [localLocation, setLocalLocation] = useState(location);
+  const [localMin, setLocalMin] = useState(min_price);
+  const [localMax, setLocalMax] = useState(max_price);
 
   useEffect(() => {
     productsAPI.categories().then(setCategories);
   }, []);
 
   useEffect(() => {
+    setLocalSearch(search);
+    setLocalLocation(location);
+    setLocalMin(min_price);
+    setLocalMax(max_price);
+  }, [search, location, min_price, max_price]);
+
+  useEffect(() => {
     setLoading(true);
-    const params = { status: "approved", page, per_page: 12 };
+    const params = { status, page, per_page: 12 };
     if (search) params.search = search;
     if (category_id) params.category_id = category_id;
+    if (min_price) params.min_price = min_price;
+    if (max_price) params.max_price = max_price;
+    if (condition) params.condition = condition;
+    if (location) params.location = location;
+    if (sort) params.sort = sort;
     productsAPI.getAll(params)
       .then((data) => { setProducts(data.products); setTotal(data.total); setPages(data.pages); })
       .finally(() => setLoading(false));
-  }, [page, search, category_id]);
+  }, [page, status, search, category_id, min_price, max_price, condition, location, sort]);
 
   const updateParam = (key, val) => {
     const p = new URLSearchParams(searchParams);
@@ -38,9 +59,19 @@ export default function ShopPage() {
     setSearchParams(p);
   };
 
+  const applyFilters = () => {
+    const p = new URLSearchParams(searchParams);
+    if (localSearch) p.set("search", localSearch); else p.delete("search");
+    if (localLocation) p.set("location", localLocation); else p.delete("location");
+    if (localMin) p.set("min_price", localMin); else p.delete("min_price");
+    if (localMax) p.set("max_price", localMax); else p.delete("max_price");
+    p.delete("page");
+    setSearchParams(p);
+  };
+
   const handleSearch = (e) => {
     e.preventDefault();
-    updateParam("search", localSearch);
+    applyFilters();
   };
 
   return (
@@ -69,6 +100,30 @@ export default function ShopPage() {
                 ))}
               </div>
             </div>
+
+            <div className="card" style={{ padding: 20, marginTop: 16 }}>
+              <h3 style={styles.filterTitle}>Filters</h3>
+              <div style={{ display: "grid", gap: 10 }}>
+                <select className="input-field" value={condition} onChange={(e) => updateParam("condition", e.target.value)}>
+                  <option value="">Any Condition</option>
+                  <option>Like New</option>
+                  <option>Good</option>
+                  <option>Fair</option>
+                </select>
+                <input className="input-field" placeholder="Location (e.g. Makati)" value={localLocation} onChange={(e) => setLocalLocation(e.target.value)} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <input className="input-field" placeholder="Min Price" value={localMin} onChange={(e) => setLocalMin(e.target.value)} />
+                  <input className="input-field" placeholder="Max Price" value={localMax} onChange={(e) => setLocalMax(e.target.value)} />
+                </div>
+                <select className="input-field" value={sort} onChange={(e) => updateParam("sort", e.target.value)}>
+                  <option value="newest">Newest</option>
+                  <option value="price_asc">Price: Low to High</option>
+                  <option value="price_desc">Price: High to Low</option>
+                  <option value="views_desc">Most Viewed</option>
+                </select>
+                <button className="btn btn-outline" onClick={applyFilters}>Apply Filters</button>
+              </div>
+            </div>
           </aside>
 
           {/* Main */}
@@ -87,7 +142,7 @@ export default function ShopPage() {
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={() => { setLocalSearch(""); setSearchParams({}); }}
+                  onClick={() => { setLocalSearch(""); setLocalLocation(""); setLocalMin(""); setLocalMax(""); setSearchParams({}); }}
                 >
                   Clear
                 </button>

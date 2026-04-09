@@ -9,6 +9,7 @@ const statusBadge = {
   approved: "badge-green",
   rejected: "badge-red",
   sold: "badge-gray",
+  inventory: "badge-blue",
 };
 
 const statusLabel = {
@@ -16,6 +17,7 @@ const statusLabel = {
   approved: "✅ Approved",
   rejected: "❌ Rejected",
   sold: "🏷️ Sold",
+  inventory: "📦 In Inventory",
 };
 
 export default function MyProductsPage() {
@@ -120,6 +122,8 @@ export default function MyProductsPage() {
                     <th>Asking Price</th>
                     <th>Negotiated Price</th>
                     <th>Condition</th>
+                    <th>Location</th>
+                    <th>Views</th>
                     <th>Status</th>
                     <th>Submitted</th>
                     <th>Actions</th>
@@ -142,6 +146,8 @@ export default function MyProductsPage() {
                         <td>₱{p.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
                         <td>{p.negotiated_price ? <span style={{ color: "var(--green)", fontWeight: 600 }}>₱{p.negotiated_price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span> : <span style={{ color: "var(--gray-400)" }}>—</span>}</td>
                         <td>{p.condition}</td>
+                        <td style={{ fontSize: 12, color: "var(--gray-500)" }}>{p.location || "—"}</td>
+                        <td style={{ fontSize: 12, color: "var(--gray-500)" }}>{p.view_count || 0}</td>
                         <td>
                           <span className={`badge ${statusBadge[p.status]}`}>{statusLabel[p.status]}</span>
                           {p.status === "rejected" && p.rejection_reason && (

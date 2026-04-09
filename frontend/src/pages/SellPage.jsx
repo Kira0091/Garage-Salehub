@@ -17,6 +17,7 @@ export default function SellPage() {
     price: "",
     quantity: "1",
     category_id: "",
+    location: "",
   });
   const [files, setFiles] = useState([]);
 
@@ -53,6 +54,7 @@ export default function SellPage() {
       fd.append("price", form.price);
       fd.append("quantity", form.quantity || "1");
       fd.append("category_id", form.category_id);
+      if (form.location) fd.append("location", form.location);
       files.forEach((f) => fd.append("images", f));
 
       await productsAPI.create(fd);
@@ -112,6 +114,11 @@ export default function SellPage() {
               </select>
             </div>
 
+            <div className="input-group">
+              <label>Location</label>
+              <input className="input-field" placeholder="e.g. Makati City" value={form.location} onChange={(e) => setField("location", e.target.value)} />
+            </div>
+
             <div className="input-group" style={{ gridColumn: "1 / -1" }}>
               <label>Description</label>
               <textarea
@@ -150,4 +157,3 @@ export default function SellPage() {
     </div>
   );
 }
-

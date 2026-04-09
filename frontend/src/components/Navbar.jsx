@@ -1,8 +1,9 @@
 ﻿// src/components/Navbar.jsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import { notificationsAPI } from "../services/api";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -11,6 +12,33 @@ export default function Navbar() {
   const location = useLocation();
   const [search, setSearch] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
+
+  useEffect(() => {
+    const readCount = () => {
+      const n = parseInt(localStorage.getItem("notif_unread") || "0", 10);
+      setNotifCount(Number.isFinite(n) ? n : 0);
+    };
+    readCount();
+    window.addEventListener("storage", readCount);
+    return () => window.removeEventListener("storage", readCount);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    let timer = null;
+    const poll = async () => {
+      try {
+        const data = await notificationsAPI.getAll();
+        const unread = data.filter((n) => !n.is_read).length;
+        localStorage.setItem("notif_unread", String(unread));
+        setNotifCount(unread);
+      } catch {}
+    };
+    poll();
+    timer = setInterval(poll, 15000);
+    return () => clearInterval(timer);
+  }, [user]);
 
   const isAdminDashboard =
     location.pathname === "/admin" && String(user?.role || "").trim().toLowerCase() === "admin";
@@ -75,10 +103,13 @@ export default function Navbar() {
                 </button>
                 {userMenuOpen && (
                   <div style={styles.dropdown}>
-                    <Link to="/profile" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Profile</Link>
-                    <Link to="/my-products" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Submissions</Link>
-                    <Link to="/orders" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Orders</Link>
-                    <Link to="/chat" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Messages</Link>
+                  <Link to="/profile" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Profile</Link>
+                  <Link to="/my-products" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Submissions</Link>
+                  <Link to="/seller-dashboard" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Seller Dashboard</Link>
+                  <Link to="/orders" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Orders</Link>
+                  <Link to="/chat" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Messages</Link>
+                  <Link to="/wishlist" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Wishlist</Link>
+                  <Link to="/notifications" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Notifications</Link>
                     {String(user.role || "").toLowerCase() === "admin" && (
                       <Link to="/admin" style={{ ...styles.dropdownItem, color: "var(--red)" }} onClick={() => setUserMenuOpen(false)}>
                         Admin Panel
@@ -102,6 +133,12 @@ export default function Navbar() {
                 {count > 0 && <span style={styles.cartBadge}>{count}</span>}
               </Link>
             )}
+            {user && !isAdminDashboard && (
+              <Link to="/notifications" style={styles.iconBtn} aria-label="Notifications">
+                🔔
+                {notifCount > 0 && <span style={styles.cartBadge}>{notifCount}</span>}
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -112,6 +149,7 @@ export default function Navbar() {
             <Link to="/" style={styles.navLink}>Home</Link>
             <Link to="/shop" style={styles.navLink}>Shop</Link>
             <Link to="/shop?status=approved" style={styles.navLink}>Today's Deals</Link>
+            <Link to="/wishlist" style={styles.navLink}>Wishlist</Link>
             <Link to="/sell" style={{ ...styles.navLink, color: "var(--red)", fontWeight: 700 }}>+ Sell an Item</Link>
             <Link to="/chat" style={styles.navLink}>Messages</Link>
           </div>
@@ -143,6 +181,7 @@ const styles = {
   dropdownDivider: { borderTop: "1px solid var(--gray-200)", margin: "4px 0" },
   cartBtn: { position: "relative", fontSize: 14, padding: "6px 10px", textDecoration: "none", border: "1px solid var(--gray-200)", borderRadius: "var(--radius)", color: "var(--black)" },
   cartBadge: { position: "absolute", top: -6, right: -6, background: "var(--red)", color: "white", borderRadius: "50%", fontSize: 11, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 },
+  iconBtn: { position: "relative", fontSize: 16, padding: "6px 10px", textDecoration: "none", border: "1px solid var(--gray-200)", borderRadius: "var(--radius)", color: "var(--black)" },
   navLinks: { background: "var(--black)", padding: "0" },
   navLinksInner: { display: "flex", alignItems: "center", gap: 4 },
   navLink: { color: "rgba(255,255,255,0.85)", padding: "11px 16px", fontSize: 14, fontWeight: 500, display: "block", transition: "color 0.15s", textDecoration: "none" },
