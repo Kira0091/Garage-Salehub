@@ -1,7 +1,8 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask import Blueprint, request, jsonify, session
+from flask_jwt_extended import create_access_token
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import db, User
+from auth_helpers import login_required, get_current_user_id
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -27,6 +28,9 @@ def register():
     db.session.commit()
 
     token = create_access_token(identity=str(user.id))
+    session["user_id"] = user.id
+    session["role"] = user.role
+    session.permanent = True
     return jsonify({"token": token, "user": user.to_dict()}), 201
 
 
@@ -38,13 +42,16 @@ def login():
         return jsonify({"error": "Invalid email or password"}), 401
 
     token = create_access_token(identity=str(user.id))
+    session["user_id"] = user.id
+    session["role"] = user.role
+    session.permanent = True
     return jsonify({"token": token, "user": user.to_dict()}), 200
 
 
 @auth_bp.route("/me", methods=["GET"])
-@jwt_required()
+@login_required
 def me():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -52,9 +59,9 @@ def me():
 
 
 @auth_bp.route("/me", methods=["PUT"])
-@jwt_required()
+@login_required
 def update_me():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     user = User.query.get(user_id)
     data = request.get_json()
     user.name = data.get("name", user.name)
@@ -62,3 +69,9 @@ def update_me():
     user.address = data.get("address", user.address)
     db.session.commit()
     return jsonify(user.to_dict()), 200
+
+
+@auth_bp.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    return jsonify({"message": "Logged out"}), 200

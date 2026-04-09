@@ -1,16 +1,16 @@
-// src/pages/ProductDetailPage.jsx
+﻿// src/pages/ProductDetailPage.jsx
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { productsAPI, reviewsAPI, wishlistAPI, ordersAPI } from "../services/api";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { useToast } from "../components/Toast";
+import { alertError, alertSuccess } from "../utils/alerts";
+import Icon from "../components/Icon";
 
 export default function ProductDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { addToCart } = useCart();
-  const toast = useToast();
   const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -51,12 +51,12 @@ export default function ProductDetailPage() {
 
   const handleAddToCart = () => {
     addToCart(product, qty);
-    toast("Added to cart!", "success");
+    alertSuccess("Added to cart", `${qty} item(s) added.`);
   };
 
   const handleReviewSubmit = async () => {
     if (!orderId) {
-      toast("You can review only after delivery.", "error");
+      await alertError("You can review only after delivery.");
       return;
     }
     try {
@@ -66,13 +66,13 @@ export default function ProductDetailPage() {
         rating: reviewRating,
         comment: reviewComment,
       });
-      toast("Review submitted!", "success");
+      await alertSuccess("Review submitted", "Thanks for your feedback.");
       setReviewComment("");
       const data = await reviewsAPI.seller(product.seller.id);
       setReviews(data.reviews || []);
       setRatingInfo({ avg: data.avg_rating, count: data.count });
     } catch (e) {
-      toast(e.message, "error");
+      await alertError(e.message || "Review submission failed");
     }
   };
 
@@ -91,7 +91,6 @@ export default function ProductDetailPage() {
     <div className="page">
       <div className="container">
         <div style={styles.layout}>
-          {/* Images */}
           <div style={styles.imgSection}>
             <div style={styles.mainImg}>
               <img src={imgs[activeImg]} alt={product.title} style={styles.mainImgEl} />
@@ -112,28 +111,33 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          {/* Info */}
           <div style={styles.infoSection}>
             {product.category && (
-              <div style={styles.breadcrumb}>{product.category.icon} {product.category.name}</div>
+              <div style={styles.breadcrumb}>
+                <Icon name="box" size={13} color="var(--gray-400)" /> {product.category.name}
+              </div>
             )}
             <h1 style={styles.title}>{product.title}</h1>
 
             <div style={styles.metaRow}>
               <span style={{ ...styles.condition, color: conditionColors[product.condition] || "var(--gray-500)" }}>
-                ● {product.condition}
+                • {product.condition}
               </span>
               <span style={styles.sellerInfo}>
                 Sold by <strong>{product.seller.name}</strong>
-                {ratingInfo.avg && <span style={styles.rating}>★ {ratingInfo.avg} ({ratingInfo.count})</span>}
+                {ratingInfo.avg && (
+                  <span style={styles.rating}>
+                    <Icon name="star" size={12} color="var(--green)" /> {ratingInfo.avg} ({ratingInfo.count})
+                  </span>
+                )}
               </span>
             </div>
 
             <div style={styles.priceBlock}>
-              <span style={styles.price}>₱{price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+              <span style={styles.price}>PHP {price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
               {hasDiscount && (
                 <>
-                  <span style={styles.origPrice}>₱{product.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+                  <span style={styles.origPrice}>PHP {product.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
                   <span className="badge badge-red">
                     -{Math.round(((product.price - product.negotiated_price) / product.price) * 100)}% OFF
                   </span>
@@ -143,9 +147,13 @@ export default function ProductDetailPage() {
 
             <div style={styles.stockInfo}>
               {product.stock > 0 ? (
-                <span className="badge badge-green">✓ In Stock ({product.stock} available)</span>
+                <span className="badge badge-green" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Icon name="check-circle" size={13} color="var(--green)" /> In Stock ({product.stock} available)
+                </span>
               ) : (
-                <span className="badge badge-red">✗ Out of Stock</span>
+                <span className="badge badge-red" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Icon name="x-circle" size={13} color="var(--red)" /> Out of Stock
+                </span>
               )}
             </div>
             {product.location && (
@@ -165,7 +173,7 @@ export default function ProductDetailPage() {
               <div style={styles.qtyRow}>
                 <label style={{ fontSize: 14, fontWeight: 600 }}>Quantity:</label>
                 <div style={styles.qtyControl}>
-                  <button style={styles.qtyBtn} onClick={() => setQty(Math.max(1, qty - 1))}>−</button>
+                  <button style={styles.qtyBtn} onClick={() => setQty(Math.max(1, qty - 1))}>-</button>
                   <span style={styles.qtyNum}>{qty}</span>
                   <button style={styles.qtyBtn} onClick={() => setQty(Math.min(product.stock, qty + 1))}>+</button>
                 </div>
@@ -179,7 +187,7 @@ export default function ProductDetailPage() {
                 disabled={product.stock === 0}
                 onClick={handleAddToCart}
               >
-                🛒 Add to Cart
+                <Icon name="cart" size={16} color="white" /> Add to Cart
               </button>
               {user && (
                 <button
@@ -187,13 +195,13 @@ export default function ProductDetailPage() {
                   onClick={async () => {
                     try {
                       await wishlistAPI.add({ product_id: product.id });
-                      toast("Saved to wishlist", "success");
+                      await alertSuccess("Saved", "Item added to wishlist.");
                     } catch (e) {
-                      toast(e.message || "Wishlist update failed", "error");
+                      await alertError(e.message || "Wishlist update failed");
                     }
                   }}
                 >
-                  ♡ Save
+                  Save
                 </button>
               )}
             </div>
@@ -227,7 +235,9 @@ export default function ProductDetailPage() {
             <div style={{ display: "grid", gap: 12 }}>
               {reviews.map((r) => (
                 <div key={r.id} style={{ borderBottom: "1px solid var(--gray-100)", paddingBottom: 10 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{r.buyer_name || "Buyer"} • {r.rating}★</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    {r.buyer_name || "Buyer"} • {r.rating} <Icon name="star" size={12} color="var(--green)" />
+                  </div>
                   <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 4 }}>{r.comment}</div>
                 </div>
               ))}
@@ -249,12 +259,12 @@ const styles = {
   thumb: { width: 72, height: 72, objectFit: "cover", borderRadius: 8, cursor: "pointer", border: "2px solid transparent", transition: "border-color 0.15s" },
   thumbActive: { border: "2px solid var(--red)" },
   infoSection: {},
-  breadcrumb: { fontSize: 13, color: "var(--gray-400)", marginBottom: 8 },
+  breadcrumb: { fontSize: 13, color: "var(--gray-400)", marginBottom: 8, display: "inline-flex", alignItems: "center", gap: 6 },
   title: { fontSize: 28, marginBottom: 12 },
   metaRow: { display: "flex", alignItems: "center", gap: 16, marginBottom: 20 },
   condition: { fontSize: 14, fontWeight: 700 },
   sellerInfo: { fontSize: 13, color: "var(--gray-500)" },
-  rating: { marginLeft: 8, color: "var(--green)", fontWeight: 700, fontSize: 12 },
+  rating: { marginLeft: 8, color: "var(--green)", fontWeight: 700, fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 },
   priceBlock: { display: "flex", alignItems: "center", gap: 12, marginBottom: 12 },
   price: { fontSize: 36, fontWeight: 800, color: "var(--red)", fontFamily: "Syne, sans-serif" },
   origPrice: { fontSize: 18, color: "var(--gray-400)", textDecoration: "line-through" },
@@ -267,5 +277,4 @@ const styles = {
   qtyBtn: { width: 36, height: 36, background: "var(--gray-50)", border: "none", cursor: "pointer", fontSize: 18, fontWeight: 600 },
   qtyNum: { width: 40, textAlign: "center", fontSize: 15, fontWeight: 600 },
   actions: { display: "flex", gap: 12, marginBottom: 20 },
-  chatBox: { background: "var(--gray-50)", borderRadius: "var(--radius)", padding: 16, border: "1px solid var(--gray-200)" },
 };

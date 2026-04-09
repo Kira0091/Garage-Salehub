@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from database import db, User, Product, OrderItem, Order, Wishlist
 from sqlalchemy import func
+from auth_helpers import login_required, get_current_user_id
 
 users_bp = Blueprint("users", __name__)
 
@@ -13,9 +13,9 @@ def get_user(user_id):
 
 
 @users_bp.route("/me/analytics", methods=["GET"])
-@jwt_required()
+@login_required
 def my_analytics():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404

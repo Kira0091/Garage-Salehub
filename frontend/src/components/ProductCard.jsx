@@ -1,16 +1,17 @@
-// src/components/ProductCard.jsx
+﻿// src/components/ProductCard.jsx
 import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { productsAPI, wishlistAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { useToast } from "./Toast";
+import { alertError, alertSuccess } from "../utils/alerts";
+import Icon from "./Icon";
+import { categoryIconName } from "../utils/categoryIcons";
 
 const conditionColor = { "Like New": "var(--green)", "Good": "var(--blue)", "Fair": "var(--yellow)" };
 
 export default function ProductCard({ product }) {
   const { addToCart } = useCart();
   const { user } = useAuth();
-  const toast = useToast();
   const price = product.negotiated_price || product.price;
   const hasDiscount = product.negotiated_price && product.negotiated_price < product.price;
   const imgSrc = product.images?.[0]
@@ -36,22 +37,28 @@ export default function ProductCard({ product }) {
           <span style={{ ...styles.condition, color: conditionColor[product.condition] || "var(--gray-500)" }}>
             {product.condition}
           </span>
-          {product.category && <span style={styles.cat}>{product.category.icon} {product.category.name}</span>}
+          {product.category && (
+            <span style={styles.cat}>
+              <Icon name={categoryIconName(product.category.name)} size={12} color="var(--gray-400)" /> {product.category.name}
+            </span>
+          )}
         </div>
 
         <Link to={`/product/${product.id}`} style={styles.title}>{product.title}</Link>
 
         <div style={styles.priceRow}>
-          <span style={styles.price}>₱{price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+          <span style={styles.price}>PHP {price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
           {hasDiscount && (
-            <span style={styles.originalPrice}>₱{product.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+            <span style={styles.originalPrice}>PHP {product.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
           )}
         </div>
 
         <div style={styles.seller}>
           By {product.seller?.name}
           {product.seller?.rating_avg && (
-            <span style={styles.rating}>★ {product.seller.rating_avg} ({product.seller.rating_count || 0})</span>
+            <span style={styles.rating}>
+              <Icon name="star" size={11} color="var(--green)" /> {product.seller.rating_avg} ({product.seller.rating_count || 0})
+            </span>
           )}
         </div>
 
@@ -60,7 +67,10 @@ export default function ProductCard({ product }) {
             className="btn btn-primary"
             style={{ flex: 1 }}
             disabled={product.stock === 0}
-            onClick={() => addToCart(product)}
+            onClick={() => {
+              addToCart(product);
+              alertSuccess("Added to cart", "Item added successfully.");
+            }}
           >
             {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
           </button>
@@ -72,13 +82,13 @@ export default function ProductCard({ product }) {
               onClick={async () => {
                 try {
                   await wishlistAPI.add({ product_id: product.id });
-                  toast("Saved to wishlist", "success");
+                  await alertSuccess("Saved", "Item added to wishlist.");
                 } catch (e) {
-                  toast(e.message || "Wishlist update failed", "error");
+                  await alertError(e.message || "Wishlist update failed");
                 }
               }}
             >
-              ♡
+              <Icon name="check-circle" size={14} color="var(--gray-600)" />
             </button>
           )}
         </div>
@@ -95,11 +105,12 @@ const styles = {
   discountBadge: { position: "absolute", top: 10, left: 10, background: "var(--red)", color: "white", padding: "3px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700 },
   info: { padding: "14px", flex: 1, display: "flex", flexDirection: "column" },
   condition: { fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" },
-  cat: { fontSize: 11, color: "var(--gray-400)", background: "var(--gray-100)", padding: "2px 8px", borderRadius: 20 },
+  cat: { fontSize: 11, color: "var(--gray-400)", background: "var(--gray-100)", padding: "2px 8px", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 4 },
   title: { fontSize: 15, fontWeight: 600, color: "var(--black)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", marginBottom: 8, lineHeight: 1.4 },
   priceRow: { display: "flex", alignItems: "center", gap: 8 },
   price: { fontSize: 18, fontWeight: 800, color: "var(--red)", fontFamily: "Syne, sans-serif" },
   originalPrice: { fontSize: 13, color: "var(--gray-400)", textDecoration: "line-through" },
   seller: { fontSize: 12, color: "var(--gray-400)", marginTop: 4, display: "flex", gap: 8, alignItems: "center" },
-  rating: { fontSize: 11, color: "var(--green)", fontWeight: 700 },
+  rating: { fontSize: 11, color: "var(--green)", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 },
 };
+

@@ -2,13 +2,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { useToast } from "../components/Toast";
+import { alertError, alertSuccess } from "../utils/alerts";
 
 export function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
-  const toast = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -16,10 +15,11 @@ export function LoginPage() {
     setLoading(true);
     try {
       const user = await login(form.email, form.password);
-      toast(`Welcome back, ${user.name.split(" ")[0]}!`, "success");
+      const welcomeName = String(user?.name || user?.full_name || user?.username || "User").trim().split(" ")[0] || "User";
+      await alertSuccess("Login successful", `Welcome back, ${welcomeName}!`);
       navigate(user.role === "admin" ? "/admin" : "/");
     } catch (e) {
-      toast(e.message, "error");
+      await alertError(e.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -63,7 +63,6 @@ export function RegisterPage() {
   const [form, setForm] = useState({ name: "", email: "", password: "", phone: "", address: "" });
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
-  const toast = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -71,10 +70,10 @@ export function RegisterPage() {
     setLoading(true);
     try {
       await register(form);
-      toast("Account created! Welcome to GarageSaleHub!", "success");
+      await alertSuccess("Account created", "Welcome to GarageSaleHub!");
       navigate("/");
     } catch (e) {
-      toast(e.message, "error");
+      await alertError(e.message || "Registration failed");
     } finally {
       setLoading(false);
     }

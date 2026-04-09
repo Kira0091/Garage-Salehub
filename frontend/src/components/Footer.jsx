@@ -1,5 +1,6 @@
-// src/components/Footer.jsx
+﻿// src/components/Footer.jsx
 import { Link } from "react-router-dom";
+import Icon from "./Icon";
 
 export default function Footer() {
   return (
@@ -12,7 +13,7 @@ export default function Footer() {
               <span style={styles.logoText}>GarageSale<strong>Hub</strong></span>
             </div>
             <p style={styles.desc}>
-              The digital marketplace for second-hand household items. 
+              The digital marketplace for second-hand household items.
               Buy and sell with trust and transparency.
             </p>
           </div>
@@ -32,10 +33,10 @@ export default function Footer() {
           </div>
           <div>
             <h4 style={styles.colTitle}>Features</h4>
-            <p style={styles.feature}>✅ Free Shipping on ₱500+</p>
-            <p style={styles.feature}>🔄 Easy Returns</p>
-            <p style={styles.feature}>🔒 Secure Payments</p>
-            <p style={styles.feature}>💬 Direct Chat</p>
+            <p style={styles.feature}><Icon name="truck" size={14} /> Free Shipping on PHP 500+</p>
+            <p style={styles.feature}><Icon name="rotate" size={14} /> Easy Returns</p>
+            <p style={styles.feature}><Icon name="lock" size={14} /> Secure Payments</p>
+            <p style={styles.feature}><Icon name="message" size={14} /> Direct Chat</p>
           </div>
         </div>
         <div style={styles.bottom}>
@@ -60,7 +61,7 @@ const styles = {
   desc: { fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.7, maxWidth: 260 },
   colTitle: { fontSize: 14, fontWeight: 700, marginBottom: 16, color: "rgba(255,255,255,0.9)" },
   link: { display: "block", fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 10, textDecoration: "none", transition: "color 0.15s" },
-  feature: { fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 8 },
+  feature: { fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 },
   bottom: { borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center" },
   copy: { fontSize: 12, color: "rgba(255,255,255,0.3)" },
   badges: { display: "flex", gap: 8 },

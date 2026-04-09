@@ -1,22 +1,22 @@
 from flask import Blueprint, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from database import db, Notification
+from auth_helpers import login_required, get_current_user_id
 
 notifications_bp = Blueprint("notifications", __name__)
 
 
 @notifications_bp.route("/", methods=["GET"])
-@jwt_required()
+@login_required
 def get_notifications():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     notes = Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc()).all()
     return jsonify([n.to_dict() for n in notes]), 200
 
 
 @notifications_bp.route("/<int:note_id>/read", methods=["PUT"])
-@jwt_required()
+@login_required
 def mark_read(note_id):
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     note = Notification.query.filter_by(id=note_id, user_id=user_id).first()
     if not note:
         return jsonify({"error": "Not found"}), 404
@@ -26,9 +26,9 @@ def mark_read(note_id):
 
 
 @notifications_bp.route("/read-all", methods=["PUT"])
-@jwt_required()
+@login_required
 def mark_all_read():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     Notification.query.filter_by(user_id=user_id, is_read=False).update({"is_read": True})
     db.session.commit()
     return jsonify({"message": "All notifications marked as read"}), 200

@@ -1,20 +1,42 @@
-// src/pages/CartPage.jsx
+﻿// src/pages/CartPage.jsx
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { productsAPI } from "../services/api";
+import { confirmAction } from "../utils/alerts";
+import Icon from "../components/Icon";
 
 export default function CartPage() {
   const { cart, removeFromCart, updateQuantity, total, clearCart } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const handleRemove = async (productId) => {
+    const confirmed = await confirmAction({
+      title: "Remove this item?",
+      text: "This item will be removed from your cart.",
+      confirmText: "Remove",
+    });
+    if (!confirmed) return;
+    removeFromCart(productId);
+  };
+
+  const handleClearCart = async () => {
+    const confirmed = await confirmAction({
+      title: "Clear entire cart?",
+      text: "All items in your cart will be removed.",
+      confirmText: "Clear cart",
+    });
+    if (!confirmed) return;
+    clearCart();
+  };
+
   if (cart.length === 0) {
     return (
       <div className="page">
         <div className="container">
           <div className="empty-state">
-            <div className="empty-state-icon">🛒</div>
+            <div className="empty-state-icon"><Icon name="cart" size={52} color="var(--gray-400)" /></div>
             <div className="empty-state-title">Your cart is empty</div>
             <div className="empty-state-text">Add some items to get started</div>
             <Link to="/shop" className="btn btn-primary" style={{ marginTop: 16 }}>Browse Products</Link>
@@ -28,12 +50,11 @@ export default function CartPage() {
     <div className="page">
       <div className="container">
         <div className="page-header">
-          <h1 className="page-title">🛒 Shopping Cart</h1>
+          <h1 className="page-title">Shopping Cart</h1>
           <p className="page-subtitle">{cart.length} item{cart.length !== 1 ? "s" : ""} in your cart</p>
         </div>
 
         <div style={styles.layout}>
-          {/* Items */}
           <div>
             {cart.map(({ product, quantity }) => {
               const price = product.negotiated_price || product.price;
@@ -47,24 +68,23 @@ export default function CartPage() {
                       <span className="badge badge-gray">{product.condition}</span>
                       {product.category && <span style={{ fontSize: 12, color: "var(--gray-400)" }}>{product.category.name}</span>}
                     </div>
-                    <div style={styles.itemPrice}>₱{price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</div>
+                    <div style={styles.itemPrice}>PHP {price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</div>
                   </div>
                   <div style={styles.itemActions}>
                     <div style={styles.qtyControl}>
-                      <button style={styles.qtyBtn} onClick={() => updateQuantity(product.id, quantity - 1)}>−</button>
+                      <button style={styles.qtyBtn} onClick={() => updateQuantity(product.id, quantity - 1)}>-</button>
                       <span style={styles.qtyNum}>{quantity}</span>
                       <button style={styles.qtyBtn} onClick={() => updateQuantity(product.id, Math.min(product.stock, quantity + 1))}>+</button>
                     </div>
-                    <div style={styles.subtotal}>₱{(price * quantity).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</div>
-                    <button style={styles.removeBtn} onClick={() => removeFromCart(product.id)}>🗑️</button>
+                    <div style={styles.subtotal}>PHP {(price * quantity).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</div>
+                    <button style={styles.removeBtn} onClick={() => handleRemove(product.id)}><Icon name="trash" size={18} color="var(--gray-500)" /></button>
                   </div>
                 </div>
               );
             })}
-            <button className="btn btn-ghost btn-sm" onClick={clearCart} style={{ marginTop: 8 }}>Clear Cart</button>
+            <button className="btn btn-ghost btn-sm" onClick={handleClearCart} style={{ marginTop: 8 }}>Clear Cart</button>
           </div>
 
-          {/* Summary */}
           <div>
             <div className="card" style={styles.summary}>
               <h3 style={styles.summaryTitle}>Order Summary</h3>
@@ -73,8 +93,8 @@ export default function CartPage() {
                   const price = product.negotiated_price || product.price;
                   return (
                     <div key={product.id} style={styles.summaryRow}>
-                      <span style={{ fontSize: 13, color: "var(--gray-600)" }}>{product.title} × {quantity}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>₱{(price * quantity).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+                      <span style={{ fontSize: 13, color: "var(--gray-600)" }}>{product.title} x {quantity}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>PHP {(price * quantity).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
                     </div>
                   );
                 })}
@@ -82,7 +102,7 @@ export default function CartPage() {
               <div style={styles.divider} />
               <div style={styles.totalRow}>
                 <span style={{ fontWeight: 700 }}>Total</span>
-                <span style={styles.totalPrice}>₱{total.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+                <span style={styles.totalPrice}>PHP {total.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
               </div>
               <button
                 className="btn btn-primary btn-lg"
@@ -92,7 +112,7 @@ export default function CartPage() {
                 Proceed to Checkout
               </button>
               <Link to="/shop" className="btn btn-ghost btn-sm" style={{ width: "100%", marginTop: 10, justifyContent: "center" }}>
-                ← Continue Shopping
+                Back to Shop
               </Link>
             </div>
           </div>
@@ -115,7 +135,7 @@ const styles = {
   qtyBtn: { width: 32, height: 32, background: "var(--gray-50)", border: "none", cursor: "pointer", fontSize: 16, fontWeight: 600 },
   qtyNum: { width: 36, textAlign: "center", fontSize: 14, fontWeight: 600 },
   subtotal: { fontSize: 15, fontWeight: 700 },
-  removeBtn: { background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: 4, opacity: 0.7 },
+  removeBtn: { background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: 4, opacity: 0.8, display: "inline-flex", alignItems: "center", justifyContent: "center" },
   summary: { padding: 24, position: "sticky", top: 160 },
   summaryTitle: { fontSize: 18, marginBottom: 16 },
   summaryRows: { display: "flex", flexDirection: "column", gap: 10 },

@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from database import db, Order, OrderItem, Product, User, Notification
+from auth_helpers import login_required, get_current_user_id
 import random, string
 
 orders_bp = Blueprint("orders", __name__)
@@ -10,9 +10,9 @@ def generate_tracking():
 
 
 @orders_bp.route("/", methods=["POST"])
-@jwt_required()
+@login_required
 def create_order():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     data = request.get_json()
 
     items_data = data.get("items", [])
@@ -79,9 +79,9 @@ def create_order():
 
 
 @orders_bp.route("/", methods=["GET"])
-@jwt_required()
+@login_required
 def get_orders():
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     user = User.query.get(user_id)
     if user.role == "admin":
         orders = Order.query.order_by(Order.created_at.desc()).all()
@@ -91,9 +91,9 @@ def get_orders():
 
 
 @orders_bp.route("/<int:order_id>", methods=["GET"])
-@jwt_required()
+@login_required
 def get_order(order_id):
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     order = Order.query.get_or_404(order_id)
     user = User.query.get(user_id)
     if order.buyer_id != user_id and user.role != "admin":
@@ -102,10 +102,10 @@ def get_order(order_id):
 
 
 @orders_bp.route("/<int:order_id>/pay", methods=["POST"])
-@jwt_required()
+@login_required
 def simulate_payment(order_id):
     """Simulate payment processing"""
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     order = Order.query.get_or_404(order_id)
     if order.buyer_id != user_id:
         return jsonify({"error": "Unauthorized"}), 403
@@ -127,10 +127,10 @@ def simulate_payment(order_id):
 
 
 @orders_bp.route("/<int:order_id>/status", methods=["PUT"])
-@jwt_required()
+@login_required
 def update_order_status(order_id):
     """Admin updates delivery status"""
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     user = User.query.get(user_id)
     if user.role != "admin":
         return jsonify({"error": "Admin only"}), 403
@@ -165,9 +165,9 @@ def update_order_status(order_id):
 
 
 @orders_bp.route("/<int:order_id>/cancel", methods=["POST"])
-@jwt_required()
+@login_required
 def cancel_order(order_id):
-    user_id = int(get_jwt_identity())
+    user_id = get_current_user_id()
     order = Order.query.get_or_404(order_id)
     if order.buyer_id != user_id:
         return jsonify({"error": "Unauthorized"}), 403
