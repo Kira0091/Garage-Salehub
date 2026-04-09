@@ -66,7 +66,7 @@ export default function ChatPage() {
   // Item submission form state
   const [itemForm, setItemForm] = useState({
     title: "", condition: "Good", price: "", quantity: "1",
-    category_id: "", description: "", reason: "", accessories: "",
+    category_id: "", description: "", reason: "", accessories: "", location: "",
   });
   const [itemFiles, setItemFiles] = useState([]);
   const [itemPreviews, setItemPreviews] = useState([]);
@@ -276,6 +276,7 @@ export default function ChatPage() {
         price: parseFloat(itemForm.price),
         quantity: parseInt(itemForm.quantity),
         category_id: itemForm.category_id || null,
+        location: itemForm.location || "",
         description: `${itemForm.description}\n\nReason for Selling: ${itemForm.reason}\nIncluded Accessories: ${itemForm.accessories}`.trim(),
       });
       fd.append("message_type", "item_submission");
@@ -416,6 +417,7 @@ export default function ChatPage() {
                         onClick={async () => {
                           await handleSend("price_accepted", "I accept the proposed price!", { product_id: lastProposal.product_id });
                           toast("Price accepted! The negotiated price has been saved.", "success");
+                          localStorage.setItem("my_products_refresh", Date.now().toString());
                         }}>
                         Accept
                       </button>
@@ -747,6 +749,10 @@ function ItemSubmissionForm({ categories, form, setForm, previews, onFiles, file
               {categories.map((c) => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
             </select>
           </div>
+          <div className="input-group">
+            <label>Location</label>
+            <input className="input-field" placeholder="e.g. Makati City" value={form.location} onChange={(e) => set("location", e.target.value)} />
+          </div>
           <div className="input-group" style={{ gridColumn: "1/-1" }}>
             <label>Description *</label>
             <textarea className="input-field" style={errors.description ? S.fieldError : undefined} rows={2} placeholder="Describe the item's condition, brand, model..." value={form.description} onChange={(e) => set("description", e.target.value)} />
@@ -873,9 +879,6 @@ const S = {
   },
   uploadBox: { border: "2px dashed var(--gray-300)", borderRadius: 10, cursor: "pointer", minHeight: 80, transition: "border-color 0.15s" },
 };
-
-
-
 
 
 

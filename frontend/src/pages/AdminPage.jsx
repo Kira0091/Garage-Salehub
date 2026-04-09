@@ -13,11 +13,11 @@ export default function AdminPage() {
   const [tab, setTab] = useState("Dashboard");
   const [dashboard, setDashboard] = useState(null);
   const [pendingProducts, setPendingProducts] = useState([]);
+  const [inventoryProducts, setInventoryProducts] = useState([]);
+  const [approvedProducts, setApprovedProducts] = useState([]);
   const [allOrders, setAllOrders] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [negotiateModal, setNegotiateModal] = useState(null);
-  const [negotiatedPrice, setNegotiatedPrice] = useState("");
   const [rejectModal, setRejectModal] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [conversations, setConversations] = useState([]);
@@ -41,6 +41,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (tab === "Orders") adminAPI.getAllOrders().then(setAllOrders);
     if (tab === "Users") adminAPI.getUsers().then(setUsers);
+    if (tab === "All Products") {
+      adminAPI.inventoryProducts().then(setInventoryProducts);
+      productsAPI.getAll({ status: "approved", per_page: 100 }).then((d) => setApprovedProducts(d.products || []));
+    }
     if (tab === "Messages") {
       setConvLoading(true);
       chatAPI.conversations()
@@ -50,14 +54,11 @@ export default function AdminPage() {
   }, [tab]);
 
   const handleApprove = async (product) => {
-    const price = negotiatedPrice ? parseFloat(negotiatedPrice) : null;
     try {
-      await adminAPI.approveProduct(product.id, price ? { negotiated_price: price } : {});
+      await adminAPI.approveProduct(product.id, {});
       setPendingProducts((prev) => prev.filter((p) => p.id !== product.id));
       setDashboard((d) => ({ ...d, stats: { ...d.stats, pending_products: d.stats.pending_products - 1, approved_products: d.stats.approved_products + 1 } }));
       toast("Product approved!", "success");
-      setNegotiateModal(null);
-      setNegotiatedPrice("");
     } catch (e) {
       toast(e.message, "error");
     }
@@ -71,6 +72,30 @@ export default function AdminPage() {
       toast("Product rejected", "info");
       setRejectModal(null);
       setRejectReason("");
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  };
+
+  const handleRelease = async (id) => {
+    try {
+      const released = await adminAPI.releaseProduct(id);
+      setInventoryProducts((prev) => prev.filter((p) => p.id !== id));
+      setApprovedProducts((prev) => [released, ...prev]);
+      toast("Product released to marketplace", "success");
+      setDashboard((d) => ({ ...d, stats: { ...d.stats, inventory_products: d.stats.inventory_products - 1, approved_products: d.stats.approved_products + 1 } }));
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  };
+
+  const handleMoveToInventory = async (id) => {
+    try {
+      const moved = await adminAPI.moveToInventory(id);
+      setApprovedProducts((prev) => prev.filter((p) => p.id !== id));
+      setInventoryProducts((prev) => [moved, ...prev]);
+      toast("Product moved back to inventory", "info");
+      setDashboard((d) => ({ ...d, stats: { ...d.stats, inventory_products: d.stats.inventory_products + 1, approved_products: d.stats.approved_products - 1 } }));
     } catch (e) {
       toast(e.message, "error");
     }
@@ -126,6 +151,7 @@ export default function AdminPage() {
                 { label: "Total Users", value: dashboard.stats.total_users, icon: "👥", color: "var(--blue)" },
                 { label: "Total Products", value: dashboard.stats.total_products, icon: "📦", color: "var(--black)" },
                 { label: "Pending Review", value: dashboard.stats.pending_products, icon: "⏳", color: "var(--yellow)" },
+                { label: "Inventory", value: dashboard.stats.inventory_products, icon: "🏷️", color: "var(--blue)" },
                 { label: "Approved", value: dashboard.stats.approved_products, icon: "✅", color: "var(--green)" },
                 { label: "Total Orders", value: dashboard.stats.total_orders, icon: "🛍️", color: "var(--blue)" },
                 { label: "Revenue (Paid)", value: `₱${dashboard.stats.total_revenue.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, icon: "💰", color: "var(--red)" },
@@ -207,7 +233,7 @@ export default function AdminPage() {
                       <div style={styles.pendingActions}>
                         <button
                           className="btn btn-primary"
-                          onClick={() => { setNegotiateModal(p); setNegotiatedPrice(String(p.price)); }}
+                          onClick={() => handleApprove(p)}
                         >
                           ✅ Approve
                         </button>
@@ -262,6 +288,66 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* All Products tab */}
+        {tab === "All Products" && (
+          <div className="fade-in" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            <div className="card" style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h3 style={{ fontSize: 16 }}>Inventory (Admin Only)</h3>
+                <span className="badge badge-blue">{inventoryProducts.length}</span>
+              </div>
+              {inventoryProducts.length === 0 ? (
+                <p style={{ fontSize: 13, color: "var(--gray-400)" }}>No items in inventory.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {inventoryProducts.map((p) => (
+                    <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center", paddingBottom: 10, borderBottom: "1px solid var(--gray-100)" }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{p.title}</div>
+                        <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
+                          Final Price: ₱{(p.negotiated_price || p.price).toLocaleString("en-PH")}
+                        </div>
+                      </div>
+                      <button className="btn btn-primary btn-sm" onClick={() => handleRelease(p.id)}>
+                        Release
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="card" style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h3 style={{ fontSize: 16 }}>Approved (Live in Shop)</h3>
+                <span className="badge badge-green">{approvedProducts.length}</span>
+              </div>
+              {approvedProducts.length === 0 ? (
+                <p style={{ fontSize: 13, color: "var(--gray-400)" }}>No approved products.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {approvedProducts.map((p) => (
+                    <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center", paddingBottom: 8, borderBottom: "1px solid var(--gray-100)" }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{p.title}</div>
+                        <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
+                          Price: ₱{(p.negotiated_price || p.price).toLocaleString("en-PH")}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <span className="badge badge-green">Live</span>
+                        <button className="btn btn-sm btn-ghost" onClick={() => handleMoveToInventory(p.id)}>
+                          Move to Inventory
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -334,33 +420,6 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* Negotiate Modal */}
-      {negotiateModal && (
-        <div className="modal-overlay" onClick={() => setNegotiateModal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Approve Item</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setNegotiateModal(null)}>✕</button>
-            </div>
-            <div className="modal-body">
-              <p style={{ fontSize: 14, color: "var(--gray-600)", marginBottom: 16 }}>
-                Set the final selling price. Seller's asking price: <strong>₱{negotiateModal.price.toLocaleString("en-PH")}</strong>
-              </p>
-              <div className="input-group">
-                <label>Negotiated/Final Price (₱)</label>
-                <input className="input-field" type="number" value={negotiatedPrice} onChange={(e) => setNegotiatedPrice(e.target.value)} />
-              </div>
-              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-                <button className="btn btn-ghost" onClick={() => setNegotiateModal(null)}>Cancel</button>
-                <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => handleApprove(negotiateModal)}>
-                  Approve & List Item
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Reject Modal */}
       {rejectModal && (
         <div className="modal-overlay" onClick={() => setRejectModal(null)}>
@@ -397,7 +456,7 @@ const styles = {
   miniRow: { display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--gray-100)", fontSize: 13 },
   pendingCard: { display: "flex", gap: 20, padding: 20, alignItems: "flex-start" },
   pendingImgs: { display: "flex", gap: 6, flexShrink: 0 },
-  pendingImg: { width: 80, height: 80, objectFit: "cover", borderRadius: 8 },
+  pendingImg: { width: 80, height: 80, objectFit: "cover", borderRadius: 8, background: "var(--gray-100)" },
   pendingInfo: { flex: 1 },
   pendingCommRow: { marginTop: 14, display: "flex", alignItems: "center" },
   messageSellerBtn: {
