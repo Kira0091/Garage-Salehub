@@ -18,6 +18,9 @@ import ChatPage from "./pages/ChatPage";
 import AdminPage from "./pages/AdminPage";
 import ProfilePage from "./pages/ProfilePage";
 import { LoginPage, RegisterPage } from "./pages/AuthPages";
+import WishlistPage from "./pages/WishlistPage";
+import NotificationsPage from "./pages/NotificationsPage";
+import SellerDashboardPage from "./pages/SellerDashboardPage";
 
 const isAdmin = (user) => String(user?.role || "").trim().toLowerCase() === "admin";
 
@@ -46,6 +49,9 @@ function AppRoutes() {
         <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+        <Route path="/wishlist" element={<ProtectedRoute><WishlistPage /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+        <Route path="/seller-dashboard" element={<ProtectedRoute><SellerDashboardPage /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

@@ -1,7 +1,7 @@
 // src/pages/ProductDetailPage.jsx
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { productsAPI } from "../services/api";
+import { productsAPI, reviewsAPI, wishlistAPI, ordersAPI } from "../services/api";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/Toast";
@@ -16,6 +16,11 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeImg, setActiveImg] = useState(0);
   const [qty, setQty] = useState(1);
+  const [reviews, setReviews] = useState([]);
+  const [ratingInfo, setRatingInfo] = useState({ avg: null, count: 0 });
+  const [orderId, setOrderId] = useState(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
 
   useEffect(() => {
     productsAPI.getOne(id)
@@ -24,9 +29,51 @@ export default function ProductDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    if (!product?.seller?.id) return;
+    reviewsAPI.seller(product.seller.id).then((data) => {
+      setReviews(data.reviews || []);
+      setRatingInfo({ avg: data.avg_rating, count: data.count });
+    }).catch(() => {});
+  }, [product?.seller?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    ordersAPI.getAll()
+      .then((orders) => {
+        const delivered = orders.find((o) =>
+          o.status === "delivered" && o.items.some((i) => i.product?.id === Number(id))
+        );
+        setOrderId(delivered ? delivered.id : null);
+      })
+      .catch(() => {});
+  }, [user, id]);
+
   const handleAddToCart = () => {
     addToCart(product, qty);
     toast("Added to cart!", "success");
+  };
+
+  const handleReviewSubmit = async () => {
+    if (!orderId) {
+      toast("You can review only after delivery.", "error");
+      return;
+    }
+    try {
+      await reviewsAPI.create({
+        order_id: orderId,
+        product_id: product.id,
+        rating: reviewRating,
+        comment: reviewComment,
+      });
+      toast("Review submitted!", "success");
+      setReviewComment("");
+      const data = await reviewsAPI.seller(product.seller.id);
+      setReviews(data.reviews || []);
+      setRatingInfo({ avg: data.avg_rating, count: data.count });
+    } catch (e) {
+      toast(e.message, "error");
+    }
   };
 
   if (loading) return <div className="loading-center"><div className="spinner" /></div>;
@@ -76,7 +123,10 @@ export default function ProductDetailPage() {
               <span style={{ ...styles.condition, color: conditionColors[product.condition] || "var(--gray-500)" }}>
                 ● {product.condition}
               </span>
-              <span style={styles.sellerInfo}>Sold by <strong>{product.seller.name}</strong></span>
+              <span style={styles.sellerInfo}>
+                Sold by <strong>{product.seller.name}</strong>
+                {ratingInfo.avg && <span style={styles.rating}>★ {ratingInfo.avg} ({ratingInfo.count})</span>}
+              </span>
             </div>
 
             <div style={styles.priceBlock}>
@@ -98,6 +148,11 @@ export default function ProductDetailPage() {
                 <span className="badge badge-red">✗ Out of Stock</span>
               )}
             </div>
+            {product.location && (
+              <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 12 }}>
+                Location: {product.location}
+              </div>
+            )}
 
             {product.description && (
               <div style={styles.desc}>
@@ -126,8 +181,58 @@ export default function ProductDetailPage() {
               >
                 🛒 Add to Cart
               </button>
+              {user && (
+                <button
+                  className="btn btn-ghost btn-lg"
+                  onClick={async () => {
+                    try {
+                      await wishlistAPI.add({ product_id: product.id });
+                      toast("Saved to wishlist", "success");
+                    } catch (e) {
+                      toast(e.message || "Wishlist update failed", "error");
+                    }
+                  }}
+                >
+                  ♡ Save
+                </button>
+              )}
             </div>
           </div>
+        </div>
+
+        <div className="card" style={{ padding: 20, marginTop: 30 }}>
+          <h3 style={{ marginBottom: 12 }}>Reviews</h3>
+          {user && orderId && (
+            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr auto", gap: 10, alignItems: "center", marginBottom: 16 }}>
+              <select className="input-field" value={reviewRating} onChange={(e) => setReviewRating(parseInt(e.target.value, 10))}>
+                {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} Stars</option>)}
+              </select>
+              <input
+                className="input-field"
+                placeholder="Write a short review"
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+              />
+              <button className="btn btn-primary" onClick={handleReviewSubmit}>Submit</button>
+            </div>
+          )}
+          {user && !orderId && (
+            <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 12 }}>
+              You can review this item only after your order is delivered.
+            </div>
+          )}
+          {reviews.length === 0 ? (
+            <div style={{ color: "var(--gray-500)", fontSize: 13 }}>No reviews yet.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 12 }}>
+              {reviews.map((r) => (
+                <div key={r.id} style={{ borderBottom: "1px solid var(--gray-100)", paddingBottom: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{r.buyer_name || "Buyer"} • {r.rating}★</div>
+                  <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 4 }}>{r.comment}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -149,6 +254,7 @@ const styles = {
   metaRow: { display: "flex", alignItems: "center", gap: 16, marginBottom: 20 },
   condition: { fontSize: 14, fontWeight: 700 },
   sellerInfo: { fontSize: 13, color: "var(--gray-500)" },
+  rating: { marginLeft: 8, color: "var(--green)", fontWeight: 700, fontSize: 12 },
   priceBlock: { display: "flex", alignItems: "center", gap: 12, marginBottom: 12 },
   price: { fontSize: 36, fontWeight: 800, color: "var(--red)", fontFamily: "Syne, sans-serif" },
   origPrice: { fontSize: 18, color: "var(--gray-400)", textDecoration: "line-through" },
