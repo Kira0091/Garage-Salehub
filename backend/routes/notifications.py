@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 from database import db, Notification
-from auth_helpers import login_required, get_current_user_id
+from services.auth import login_required, get_current_user_id
 
 notifications_bp = Blueprint("notifications", __name__)
 

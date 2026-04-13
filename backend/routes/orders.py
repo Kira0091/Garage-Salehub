@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from database import db, Order, OrderItem, Product, User, Notification
-from auth_helpers import login_required, get_current_user_id
+from services.auth import login_required, get_current_user_id
 import random, string
 
 orders_bp = Blueprint("orders", __name__)

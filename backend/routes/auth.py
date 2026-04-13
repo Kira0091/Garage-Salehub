@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, session
 from flask_jwt_extended import create_access_token
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import db, User
-from auth_helpers import login_required, get_current_user_id
+from services.auth import login_required, get_current_user_id
 
 auth_bp = Blueprint("auth", __name__)
 

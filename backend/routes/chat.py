@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from werkzeug.utils import secure_filename
 from database import db, Message, User, Product, Notification, Wishlist
-from auth_helpers import login_required, get_current_user_id
+from services.auth import login_required, get_current_user_id
 import os, uuid
 
 chat_bp = Blueprint("chat", __name__)

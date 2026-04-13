@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from database import db, Product, User, Order, Category, Notification, Wishlist
-from auth_helpers import login_required, get_current_user_id
+from services.auth import login_required, get_current_user_id
 
 admin_bp = Blueprint("admin", __name__)
 

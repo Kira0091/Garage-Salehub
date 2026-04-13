@@ -1,0 +1,20 @@
+# Backend secrets and local env
+backend/.env
+
+# Python virtualenv and caches
+backend/.venv/
+backend/__pycache__/
+backend/routes/__pycache__/
+backend/scripts/__pycache__/
+*.py[cod]
+
+# Local database/runtime data
+backend/instance/*.db
+backend/uploads/
+
+# Frontend build artifacts and deps
+frontend/node_modules/
+frontend/dist/
+
+# Local generated artifacts
+project_foldering.txt

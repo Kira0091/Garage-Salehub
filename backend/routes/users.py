@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from database import db, User, Product, OrderItem, Order, Wishlist
 from sqlalchemy import func
-from auth_helpers import login_required, get_current_user_id
+from services.auth import login_required, get_current_user_id
 
 users_bp = Blueprint("users", __name__)
 
