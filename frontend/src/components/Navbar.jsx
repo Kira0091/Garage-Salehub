@@ -47,6 +47,8 @@ export default function Navbar() {
 
   const isAdminDashboard =
     location.pathname === "/admin" && String(user?.role || "").trim().toLowerCase() === "admin";
+  // We use React Router's useLocation() to detect auth routes and avoid redundant auth CTAs.
+  const isAuthRoute = ["/auth", "/login", "/register"].includes(location.pathname);
   const hideBottomNav = isAdminDashboard;
   const logoTarget = isAdminDashboard ? "/admin" : "/";
 
@@ -96,8 +98,8 @@ export default function Navbar() {
           <div style={styles.actions}>
             {!user ? (
               <>
-                <Link to="/login" className="btn btn-ghost btn-sm">Login</Link>
-                <Link to="/register" className="btn btn-primary btn-sm">Register</Link>
+                {!isAuthRoute && <Link to="/login" className="btn btn-ghost btn-sm">Login</Link>}
+                {!isAuthRoute && <Link to="/register" className="btn btn-primary btn-sm">Register</Link>}
               </>
             ) : (
               <div style={{ position: "relative" }}>
