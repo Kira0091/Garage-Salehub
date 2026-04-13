@@ -1,12 +1,12 @@
 // src/pages/AdminPage.jsx
 import { useState, useEffect } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { adminAPI, ordersAPI, productsAPI, chatAPI } from "../services/api";
+import { adminAPI, ordersAPI, productsAPI, chatAPI, vouchersAPI, reportsAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { alertError, alertInfo, alertSuccess, confirmAction } from "../utils/alerts";
 import Icon from "../components/Icon";
 
-const TABS = ["Dashboard", "Pending Items", "All Products", "Orders", "Users", "Messages"];
+const TABS = ["Dashboard", "Pending Verifications", "All Products", "Vouchers", "Orders", "Users", "Messages", "Reports"];
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -17,7 +17,7 @@ export default function AdminPage() {
   ) || "Dashboard";
   const [tab, setTab] = useState(initialTab);
   const [dashboard, setDashboard] = useState(null);
-  const [pendingProducts, setPendingProducts] = useState([]);
+  const [pendingVerifications, setPendingVerifications] = useState([]);
   const [inventoryProducts, setInventoryProducts] = useState([]);
   const [approvedProducts, setApprovedProducts] = useState([]);
   const [allOrders, setAllOrders] = useState([]);
@@ -27,6 +27,18 @@ export default function AdminPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [conversations, setConversations] = useState([]);
   const [convLoading, setConvLoading] = useState(false);
+  const [vouchers, setVouchers] = useState([]);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherForm, setVoucherForm] = useState({
+    code: "",
+    type: "percent",
+    value: "",
+    min_order: "",
+    max_uses: "",
+    expires_at: "",
+  });
+  const [voucherMessage, setVoucherMessage] = useState("");
+  const [reports, setReports] = useState([]);
   const admin = String(user?.role || "").trim().toLowerCase() === "admin";
 
   if (authLoading) return <div className="loading-center"><div className="spinner" /></div>;
@@ -35,10 +47,10 @@ export default function AdminPage() {
   useEffect(() => {
     Promise.all([
       adminAPI.dashboard(),
-      adminAPI.pendingProducts(),
+      adminAPI.pendingVerifications(),
     ]).then(([dash, pending]) => {
       setDashboard(dash);
-      setPendingProducts(pending);
+      setPendingVerifications(pending);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -49,11 +61,20 @@ export default function AdminPage() {
       adminAPI.inventoryProducts().then(setInventoryProducts);
       productsAPI.getAll({ status: "approved", per_page: 100 }).then((d) => setApprovedProducts(d.products || []));
     }
+    if (tab === "Vouchers") {
+      setVoucherLoading(true);
+      vouchersAPI.list()
+        .then(setVouchers)
+        .finally(() => setVoucherLoading(false));
+    }
     if (tab === "Messages") {
       setConvLoading(true);
       chatAPI.conversations()
         .then(setConversations)
         .finally(() => setConvLoading(false));
+    }
+    if (tab === "Reports") {
+      reportsAPI.mine().then(setReports).catch(() => setReports([]));
     }
   }, [tab]);
 
@@ -66,8 +87,8 @@ export default function AdminPage() {
     });
     if (!confirmed) return;
     try {
-      await adminAPI.approveProduct(product.id, {});
-      setPendingProducts((prev) => prev.filter((p) => p.id !== product.id));
+      await adminAPI.verifyProduct(product.id, { action: "approve" });
+      setPendingVerifications((prev) => prev.filter((p) => p.id !== product.id));
       setDashboard((d) => ({ ...d, stats: { ...d.stats, pending_products: d.stats.pending_products - 1, approved_products: d.stats.approved_products + 1 } }));
       await alertSuccess("Product approved", `${product.title} is now approved.`);
     } catch (e) {
@@ -76,7 +97,7 @@ export default function AdminPage() {
   };
 
   const handleReject = async (id) => {
-    const product = pendingProducts.find((p) => p.id === id);
+    const product = pendingVerifications.find((p) => p.id === id);
     const confirmed = await confirmAction({
       title: "Reject this product?",
       text: product ? `${product.title} will be marked rejected.` : "This item will be marked rejected.",
@@ -84,8 +105,8 @@ export default function AdminPage() {
     });
     if (!confirmed) return;
     try {
-      await adminAPI.rejectProduct(id, { reason: rejectReason || "Item did not meet quality standards" });
-      setPendingProducts((prev) => prev.filter((p) => p.id !== id));
+      await adminAPI.verifyProduct(id, { action: "reject", reason: rejectReason || "Item did not meet verification requirements" });
+      setPendingVerifications((prev) => prev.filter((p) => p.id !== id));
       setDashboard((d) => ({ ...d, stats: { ...d.stats, pending_products: d.stats.pending_products - 1 } }));
       await alertInfo("Product rejected", "The seller has been notified.");
       setRejectModal(null);
@@ -157,6 +178,44 @@ export default function AdminPage() {
     navigate(`/chat?partner=${partner.id}&name=${name}&role=user&from=admin`);
   };
 
+  const createVoucher = async () => {
+    try {
+      const created = await vouchersAPI.create({
+        code: voucherForm.code.trim().toUpperCase(),
+        type: voucherForm.type,
+        value: Number(voucherForm.value || 0),
+        min_order: Number(voucherForm.min_order || 0),
+        max_uses: Number(voucherForm.max_uses || 1),
+        expires_at: voucherForm.expires_at || null,
+      });
+      setVouchers((prev) => [created, ...prev]);
+      setVoucherForm({ code: "", type: "percent", value: "", min_order: "", max_uses: "", expires_at: "" });
+      setVoucherMessage("Voucher created successfully.");
+    } catch (e) {
+      setVoucherMessage(e.message || "Failed to create voucher.");
+    }
+  };
+
+  const deactivateVoucher = async (id) => {
+    try {
+      const updated = await vouchersAPI.deactivate(id);
+      setVouchers((prev) => prev.map((voucher) => (voucher.id === id ? updated : voucher)));
+      setVoucherMessage("Voucher deactivated.");
+    } catch (e) {
+      setVoucherMessage(e.message || "Failed to deactivate voucher.");
+    }
+  };
+
+  const updateReportStatus = async (reportId, status) => {
+    try {
+      const updated = await reportsAPI.updateStatus(reportId, { status });
+      setReports((prev) => prev.map((report) => (report.id === reportId ? updated : report)));
+      await alertSuccess("Report updated", `Status set to ${status}.`);
+    } catch (error) {
+      await alertError(error.message || "Failed to update report status");
+    }
+  };
+
   if (loading) return <div className="loading-center"><div className="spinner" /></div>;
 
   return (
@@ -185,7 +244,7 @@ export default function AdminPage() {
               onClick={() => setTab(t)}
             >
               {t}
-              {t === "Pending Items" && dashboard?.stats?.pending_products > 0 && (
+              {t === "Pending Verifications" && dashboard?.stats?.pending_products > 0 && (
                 <span style={styles.tabBadge}>{dashboard.stats.pending_products}</span>
               )}
             </button>
@@ -242,10 +301,10 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Pending Items */}
-        {tab === "Pending Items" && (
+        {/* Pending Verifications */}
+        {tab === "Pending Verifications" && (
           <div className="fade-in">
-            {pendingProducts.length === 0 ? (
+            {pendingVerifications.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-state-icon">
                   <span style={styles.emptyStateIconBadge} aria-hidden="true">
@@ -255,17 +314,29 @@ export default function AdminPage() {
                     </svg>
                   </span>
                 </div>
-                <div className="empty-state-title">No pending items</div>
-                <div className="empty-state-text">All submissions have been reviewed</div>
+                <div className="empty-state-title">No pending verifications</div>
+                <div className="empty-state-text">All verification submissions have been reviewed</div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {pendingProducts.map((p) => {
+                {pendingVerifications.map((p) => {
+                  const verificationPhotos = p.verification_media?.photos || [];
+                  const verificationVideo = p.verification_media?.video;
                   return (
                     <div key={p.id} className="card" style={styles.pendingCard}>
                       <div style={styles.pendingImgs}>
-                        {p.images.slice(0, 3).map((imgName, i) => (
-                          <img key={i} src={productsAPI.imageUrl(imgName)} alt="" style={styles.pendingImg} />
+                        {(
+                          verificationPhotos.length > 0
+                            ? verificationPhotos.map((media) => ({
+                                ...media,
+                                url: productsAPI.verificationMediaUrl(media.filename),
+                              }))
+                            : p.images.slice(0, 3).map((filename) => ({
+                                filename,
+                                url: productsAPI.imageUrl(filename),
+                              }))
+                        ).slice(0, 3).map((media, i) => (
+                          <img key={i} src={media.url} alt="" style={styles.pendingImg} />
                         ))}
                       </div>
                       <div style={styles.pendingInfo}>
@@ -277,6 +348,26 @@ export default function AdminPage() {
                           <span><strong>Qty:</strong> {p.quantity}</span>
                           <span><strong>Seller:</strong> {p.seller.name}</span>
                           {p.category && <span><strong>Category:</strong> {p.category.name}</span>}
+                        </div>
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 6 }}>
+                            Verification media: {verificationPhotos.length} photo(s){verificationVideo ? ", 1 video" : ", no video"}
+                          </div>
+                          {verificationPhotos.length > 0 && (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                              {verificationPhotos.map((media) => (
+                                <img
+                                  key={media.id || media.filename}
+                                  src={productsAPI.verificationMediaUrl(media.filename)}
+                                  alt="Verification"
+                                  style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid var(--gray-200)" }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                          {verificationVideo?.filename && (
+                            <video controls src={productsAPI.verificationMediaUrl(verificationVideo.filename)} style={{ width: 260, maxWidth: "100%", borderRadius: 8, border: "1px solid var(--gray-200)" }} />
+                          )}
                         </div>
                         <div style={styles.pendingCommRow}>
                           <button
@@ -410,6 +501,86 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* Vouchers tab */}
+        {tab === "Vouchers" && (
+          <div className="fade-in" style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 20 }}>
+            <div className="card" style={{ padding: 16 }}>
+              <h3 style={{ marginBottom: 10 }}>Create Voucher</h3>
+              <div className="input-group" style={{ marginBottom: 10 }}>
+                <label>Code</label>
+                <input className="input-field" value={voucherForm.code} onChange={(e) => setVoucherForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))} />
+              </div>
+              <div className="input-group" style={{ marginBottom: 10 }}>
+                <label>Type</label>
+                <select className="input-field" value={voucherForm.type} onChange={(e) => setVoucherForm((f) => ({ ...f, type: e.target.value }))}>
+                  <option value="percent">percent</option>
+                  <option value="fixed">fixed</option>
+                </select>
+              </div>
+              <div className="input-group" style={{ marginBottom: 10 }}>
+                <label>Value</label>
+                <input className="input-field" type="number" value={voucherForm.value} onChange={(e) => setVoucherForm((f) => ({ ...f, value: e.target.value }))} />
+              </div>
+              <div className="input-group" style={{ marginBottom: 10 }}>
+                <label>Min Order</label>
+                <input className="input-field" type="number" value={voucherForm.min_order} onChange={(e) => setVoucherForm((f) => ({ ...f, min_order: e.target.value }))} />
+              </div>
+              <div className="input-group" style={{ marginBottom: 10 }}>
+                <label>Max Uses</label>
+                <input className="input-field" type="number" value={voucherForm.max_uses} onChange={(e) => setVoucherForm((f) => ({ ...f, max_uses: e.target.value }))} />
+              </div>
+              <div className="input-group" style={{ marginBottom: 12 }}>
+                <label>Expiry Date</label>
+                <input className="input-field" type="date" value={voucherForm.expires_at} onChange={(e) => setVoucherForm((f) => ({ ...f, expires_at: e.target.value }))} />
+              </div>
+              <button className="btn btn-primary" style={{ width: "100%" }} onClick={createVoucher}>Create</button>
+              {voucherMessage && <div style={{ marginTop: 8, fontSize: 12, color: voucherMessage.includes("success") ? "var(--green)" : "var(--red)" }}>{voucherMessage}</div>}
+            </div>
+
+            <div className="card" style={{ overflow: "hidden" }}>
+              {voucherLoading ? (
+                <div className="loading-center"><div className="spinner" /></div>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Code</th>
+                        <th>Type</th>
+                        <th>Value</th>
+                        <th>Min Order</th>
+                        <th>Uses</th>
+                        <th>Expires</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vouchers.map((voucher) => (
+                        <tr key={voucher.id}>
+                          <td>{voucher.code}</td>
+                          <td>{voucher.type}</td>
+                          <td>{voucher.type === "percent" ? `${voucher.value}%` : `PHP ${voucher.value}`}</td>
+                          <td>PHP {Number(voucher.min_order || 0).toLocaleString("en-PH")}</td>
+                          <td>{voucher.used_count}/{voucher.max_uses}</td>
+                          <td>{voucher.expires_at ? new Date(voucher.expires_at).toLocaleDateString("en-PH") : "-"}</td>
+                          <td><span className={`badge ${voucher.status === "active" ? "badge-green" : voucher.status === "expired" ? "badge-yellow" : "badge-red"}`}>{voucher.status}</span></td>
+                          <td>
+                            <button className="btn btn-sm" style={{ background: "#fee2e2", color: "var(--red)", border: "none" }} onClick={() => deactivateVoucher(voucher.id)}>
+                              Deactivate
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {vouchers.length === 0 && <tr><td colSpan={8} style={{ textAlign: "center", padding: 16 }}>No vouchers yet.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Users tab */}
         {tab === "Users" && (
           <div className="fade-in card" style={{ overflow: "hidden" }}>
@@ -476,10 +647,70 @@ export default function AdminPage() {
             )}
           </div>
         )}
+
+        {tab === "Reports" && (
+          <div className="fade-in card" style={{ overflow: "hidden" }}>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Type</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reports.map((report) => (
+                    <tr key={report.id}>
+                      <td>#{report.id}</td>
+                      <td>{report.user_name || "User"}</td>
+                      <td>{report.type}</td>
+                      <td style={{ maxWidth: 260 }}>
+                        <div style={{ fontWeight: 700 }}>{report.title}</div>
+                        {report.description && <div style={{ fontSize: 12, color: "var(--gray-500)" }}>{report.description}</div>}
+                        {report.screenshot && (
+                          <a href={reportsAPI.screenshotUrl(report.screenshot)} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
+                            View screenshot
+                          </a>
+                        )}
+                      </td>
+                      <td>
+                        <span className={`badge ${report.status === "resolved" ? "badge-green" : "badge-yellow"}`}>
+                          {report.status}
+                        </span>
+                      </td>
+                      <td>{new Date(report.created_at).toLocaleString("en-PH")}</td>
+                      <td>
+                        <select
+                          className="input-field"
+                          style={{ padding: "4px 8px", fontSize: 12 }}
+                          value={report.status}
+                          onChange={(e) => updateReportStatus(report.id, e.target.value)}
+                        >
+                          <option value="pending">pending</option>
+                          <option value="resolved">resolved</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                  {reports.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: "center", padding: 16 }}>No reports yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         </div>
       </div>
 
-      {/* Reject Modal */}
+        {/* Reject Modal */}
       {rejectModal && (
         <div className="modal-overlay" onClick={() => setRejectModal(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

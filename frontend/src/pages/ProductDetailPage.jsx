@@ -20,6 +20,8 @@ export default function ProductDetailPage() {
   const [orderId, setOrderId] = useState(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
+  const [comments, setComments] = useState([]);
+  const [commentText, setCommentText] = useState("");
 
   useEffect(() => {
     productsAPI.getOne(id)
@@ -35,6 +37,12 @@ export default function ProductDetailPage() {
       setRatingInfo({ avg: data.avg_rating, count: data.count });
     }).catch(() => {});
   }, [product?.seller?.id]);
+
+  useEffect(() => {
+    productsAPI.comments(id)
+      .then((data) => setComments(data || []))
+      .catch(() => setComments([]));
+  }, [id]);
 
   useEffect(() => {
     if (!user) return;
@@ -72,6 +80,25 @@ export default function ProductDetailPage() {
       setRatingInfo({ avg: data.avg_rating, count: data.count });
     } catch (e) {
       await alertError(e.message || "Review submission failed");
+    }
+  };
+
+  const handleCommentSubmit = async () => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    if (!commentText.trim()) {
+      await alertError("Please write a comment first.");
+      return;
+    }
+    try {
+      const created = await productsAPI.addComment(product.id, { text: commentText.trim() });
+      setComments((prev) => [created, ...prev]);
+      setCommentText("");
+      await alertSuccess("Comment posted", "Your comment is now visible.");
+    } catch (error) {
+      await alertError(error.message || "Failed to post comment");
     }
   };
 
@@ -152,6 +179,19 @@ export default function ProductDetailPage() {
                 Location: {product.location}
               </div>
             )}
+            {product.location_meta?.latitude != null && product.location_meta?.longitude != null && (
+              <div style={{ marginBottom: 16 }}>
+                <iframe
+                  title="Product location"
+                  width="100%"
+                  height="180"
+                  style={{ border: "1px solid var(--gray-200)", borderRadius: 8 }}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  src={`https://maps.google.com/maps?q=${product.location_meta.latitude},${product.location_meta.longitude}&z=14&output=embed`}
+                />
+              </div>
+            )}
 
             {product.description && (
               <div style={styles.desc}>
@@ -228,6 +268,36 @@ export default function ProductDetailPage() {
                 <div key={r.id} style={{ borderBottom: "1px solid var(--gray-100)", paddingBottom: 10 }}>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>{r.buyer_name || "Buyer"} • {r.rating}★</div>
                   <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 4 }}>{r.comment}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card" style={{ padding: 20, marginTop: 20 }}>
+          <h3 style={{ marginBottom: 12 }}>Comments</h3>
+          {user && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginBottom: 16 }}>
+              <input
+                className="input-field"
+                placeholder="Write a comment about this product"
+                value={commentText}
+                onChange={(event) => setCommentText(event.target.value)}
+              />
+              <button className="btn btn-primary" onClick={handleCommentSubmit}>Post</button>
+            </div>
+          )}
+          {comments.length === 0 ? (
+            <div style={{ color: "var(--gray-500)", fontSize: 13 }}>No comments yet.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 12 }}>
+              {comments.map((comment) => (
+                <div key={comment.id} style={{ borderBottom: "1px solid var(--gray-100)", paddingBottom: 10 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{comment.username}</div>
+                  <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 4 }}>{comment.text}</div>
+                  <div style={{ fontSize: 11, color: "var(--gray-400)", marginTop: 6 }}>
+                    {new Date(comment.created_at).toLocaleString("en-PH")}
+                  </div>
                 </div>
               ))}
             </div>

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
-import { notificationsAPI } from "../services/api";
+import { loyaltyAPI, notificationsAPI } from "../services/api";
 import { alertError, alertSuccess, confirmAction } from "../utils/alerts";
 import Icon from "./Icon";
 
@@ -15,6 +15,7 @@ export default function Navbar() {
   const [search, setSearch] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const [points, setPoints] = useState(0);
   const displayName = String(user?.name || user?.full_name || user?.username || "User").trim() || "User";
   const firstName = displayName.split(" ")[0] || "User";
   const avatarInitial = displayName.charAt(0).toUpperCase() || "U";
@@ -34,14 +35,24 @@ export default function Navbar() {
     let timer = null;
     const poll = async () => {
       try {
-        const data = await notificationsAPI.getAll();
-        const unread = data.filter((n) => !n.is_read).length;
+        const data = await notificationsAPI.unreadCount();
+        const unread = data.unread_count || 0;
         localStorage.setItem("notif_unread", String(unread));
         setNotifCount(unread);
       } catch {}
     };
+    const pollPoints = async () => {
+      try {
+        const data = await loyaltyAPI.get();
+        setPoints(data.points || 0);
+      } catch {}
+    };
     poll();
-    timer = setInterval(poll, 15000);
+    pollPoints();
+    timer = setInterval(() => {
+      poll();
+      pollPoints();
+    }, 30000);
     return () => clearInterval(timer);
   }, [user]);
 
@@ -115,7 +126,10 @@ export default function Navbar() {
                         <Link className="navbar-dropdown-item" to="/profile" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Profile</Link>
                         <Link className="navbar-dropdown-item" to="/my-products" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Submissions</Link>
                         <Link className="navbar-dropdown-item" to="/seller-dashboard" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Seller Dashboard</Link>
+                        <Link className="navbar-dropdown-item" to="/dashboard" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Dashboard</Link>
+                        <Link className="navbar-dropdown-item" to="/report-problem" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Report a Problem</Link>
                         <Link className="navbar-dropdown-item" to="/orders" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Orders</Link>
+                        <Link className="navbar-dropdown-item" to="/loyalty" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Points ({points})</Link>
                         <Link className="navbar-dropdown-item" to="/chat" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Messages</Link>
                         <Link className="navbar-dropdown-item" to="/wishlist" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Wishlist</Link>
                         <Link className="navbar-dropdown-item" to="/notifications" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Notifications</Link>
@@ -141,6 +155,11 @@ export default function Navbar() {
               </Link>
             )}
             {user && !isAdminDashboard && (
+              <Link to="/loyalty" style={styles.cartBtn} aria-label="My Points">
+                Points: {points}
+              </Link>
+            )}
+            {user && !isAdminDashboard && (
               <Link to="/notifications" style={styles.iconBtn} aria-label="Notifications">
                 <Icon name="bell" size={16} />
                 {notifCount > 0 && <span style={styles.cartBadge}>{notifCount}</span>}
@@ -155,10 +174,14 @@ export default function Navbar() {
           <div className="container" style={styles.navLinksInner}>
             <Link to="/" style={styles.navLink}>Home</Link>
             <Link to="/shop" style={styles.navLink}>Shop</Link>
-            <Link to="/shop?status=approved" style={styles.navLink}>Today's Deals</Link>
-            <Link to="/wishlist" style={styles.navLink}>Wishlist</Link>
-            <Link to="/sell" style={{ ...styles.navLink, color: "var(--red)", fontWeight: 700 }}>+ Sell an Item</Link>
-            <Link to="/chat" style={styles.navLink}>Messages</Link>
+            <Link to="/shop?status=approved&deals=1" style={styles.navLink}>Today's Deals</Link>
+            {user && (
+              <>
+                <Link to="/wishlist" style={styles.navLink}>Wishlist</Link>
+                <Link to="/sell" style={{ ...styles.navLink, color: "var(--red)", fontWeight: 700 }}>+ Sell an Item</Link>
+                <Link to="/chat" style={styles.navLink}>Messages</Link>
+              </>
+            )}
           </div>
         </nav>
       )}

@@ -60,3 +60,30 @@ def my_analytics():
             "rating_count": user.to_dict().get("rating_count"),
         }
     }), 200
+
+
+@users_bp.route("/seller-dashboard", methods=["GET"])
+@login_required
+def seller_dashboard():
+    user_id = get_current_user_id()
+    total_products = Product.query.filter_by(seller_id=user_id).count()
+    approved = Product.query.filter_by(seller_id=user_id, status="approved").count()
+    rejected = Product.query.filter_by(seller_id=user_id, status="rejected").count()
+    pending = Product.query.filter_by(seller_id=user_id, status="pending").count()
+    total_views = db.session.query(func.sum(Product.view_count)).filter_by(seller_id=user_id).scalar() or 0
+
+    earnings = db.session.query(func.sum(OrderItem.unit_price * OrderItem.quantity)).join(Order).join(Product).filter(
+        Product.seller_id == user_id,
+        Order.status.in_(["processing", "shipped", "delivered"]),
+    ).scalar() or 0
+
+    recent_products = Product.query.filter_by(seller_id=user_id).order_by(Product.created_at.desc()).limit(8).all()
+    return jsonify({
+        "total_products": int(total_products),
+        "approved": int(approved),
+        "rejected": int(rejected),
+        "pending": int(pending),
+        "total_views": int(total_views),
+        "simulated_earnings": round(float(earnings), 2),
+        "recent_products": [p.to_dict() for p in recent_products],
+    }), 200

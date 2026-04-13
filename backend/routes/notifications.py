@@ -32,3 +32,11 @@ def mark_all_read():
     Notification.query.filter_by(user_id=user_id, is_read=False).update({"is_read": True})
     db.session.commit()
     return jsonify({"message": "All notifications marked as read"}), 200
+
+
+@notifications_bp.route("/unread-count", methods=["GET"])
+@login_required
+def unread_count():
+    user_id = get_current_user_id()
+    count = Notification.query.filter_by(user_id=user_id, is_read=False).count()
+    return jsonify({"unread_count": count}), 200

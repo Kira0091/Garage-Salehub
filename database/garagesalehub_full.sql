@@ -44,7 +44,8 @@ CREATE TABLE `products` (
     `stock` INT DEFAULT 1,
     `images` TEXT,
     `status` VARCHAR(30) DEFAULT 'pending',
-    `rejection_reason` VARCHAR(300) DEFAULT '',
+    `verification_status` VARCHAR(30) DEFAULT 'pending_verification',
+    `rejection_reason` TEXT NULL,
     `category_id` INT,
     `seller_id` INT NOT NULL,
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -52,6 +53,16 @@ CREATE TABLE `products` (
     PRIMARY KEY (`id`),
     FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`),
     FOREIGN KEY (`seller_id`) REFERENCES `users`(`id`)
+);
+
+CREATE TABLE `product_verification_media` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `product_id` INT NOT NULL,
+    `media_type` VARCHAR(20) NOT NULL,
+    `file_url` VARCHAR(500) NOT NULL,
+    `uploaded_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    FOREIGN KEY (`product_id`) REFERENCES `products`(`id`) ON DELETE CASCADE
 );
 
 CREATE TABLE `orders` (
@@ -64,10 +75,62 @@ CREATE TABLE `orders` (
     `delivery_address` VARCHAR(300) DEFAULT '',
     `tracking_number` VARCHAR(100) DEFAULT '',
     `notes` TEXT,
+    `voucher_code` VARCHAR(50) NULL,
+    `discount_amount` FLOAT DEFAULT 0,
+    `points_used` INT DEFAULT 0,
+    `points_earned` INT DEFAULT 0,
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     FOREIGN KEY (`buyer_id`) REFERENCES `users`(`id`)
+);
+
+CREATE TABLE `vouchers` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `code` VARCHAR(50) NOT NULL UNIQUE,
+    `type` VARCHAR(20) NOT NULL,
+    `value` FLOAT NOT NULL,
+    `min_order` FLOAT DEFAULT 0,
+    `max_uses` INT DEFAULT 1,
+    `used_count` INT DEFAULT 0,
+    `expires_at` DATETIME NULL,
+    `is_active` BOOLEAN DEFAULT TRUE,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`)
+);
+
+CREATE TABLE `voucher_usage` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `voucher_id` INT NOT NULL,
+    `user_id` INT NOT NULL,
+    `order_id` INT NOT NULL,
+    `used_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    FOREIGN KEY (`voucher_id`) REFERENCES `vouchers`(`id`),
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`),
+    FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`)
+);
+
+CREATE TABLE `loyalty_points` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `user_id` INT NOT NULL UNIQUE,
+    `points` INT DEFAULT 0,
+    `total_earned` INT DEFAULT 0,
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`)
+);
+
+CREATE TABLE `loyalty_log` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `user_id` INT NOT NULL,
+    `points` INT NOT NULL,
+    `reason` VARCHAR(100) NOT NULL,
+    `order_id` INT NULL,
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`),
+    FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`)
 );
 
 CREATE TABLE `order_items` (
@@ -114,8 +177,13 @@ INSERT INTO `categories` (`id`, `name`, `icon`) VALUES (6, 'Toys & Games', '🎮
 INSERT INTO `categories` (`id`, `name`, `icon`) VALUES (7, 'Sports', '⚽');
 INSERT INTO `categories` (`id`, `name`, `icon`) VALUES (8, 'Tools', '🔧');
 
-INSERT INTO `products` (`id`, `title`, `description`, `condition`, `price`, `negotiated_price`, `quantity`, `stock`, `images`, `status`, `rejection_reason`, `category_id`, `seller_id`, `created_at`, `updated_at`) VALUES (1, '123123', 'asfafd', 'Good', 1234.0, 1234.0, 1, 0, '0d9b199d77864ac9b109e07f038afb71_646085416_122093750457125889_323916601095131083_n.jpg', 'sold', '', 7, 2, '2026-03-08 05:35:50', '2026-03-08 05:42:38');
-INSERT INTO `products` (`id`, `title`, `description`, `condition`, `price`, `negotiated_price`, `quantity`, `stock`, `images`, `status`, `rejection_reason`, `category_id`, `seller_id`, `created_at`, `updated_at`) VALUES (2, 'tv', 'dafasf', 'Good', 123123.0, 123.0, 1, 1, '37141c9384164471bf080787b8c4e78e_628390256_775248105101881_4311850404359574616_n.jpg', 'approved', '', 2, 2, '2026-03-08 05:50:46', '2026-03-08 05:51:20');
+INSERT INTO `products` (`id`, `title`, `description`, `condition`, `price`, `negotiated_price`, `quantity`, `stock`, `images`, `status`, `verification_status`, `rejection_reason`, `category_id`, `seller_id`, `created_at`, `updated_at`) VALUES (1, '123123', 'asfafd', 'Good', 1234.0, 1234.0, 1, 0, '0d9b199d77864ac9b109e07f038afb71_646085416_122093750457125889_323916601095131083_n.jpg', 'sold', 'approved', NULL, 7, 2, '2026-03-08 05:35:50', '2026-03-08 05:42:38');
+INSERT INTO `products` (`id`, `title`, `description`, `condition`, `price`, `negotiated_price`, `quantity`, `stock`, `images`, `status`, `verification_status`, `rejection_reason`, `category_id`, `seller_id`, `created_at`, `updated_at`) VALUES (2, 'tv', 'dafasf', 'Good', 123123.0, 123.0, 1, 1, '37141c9384164471bf080787b8c4e78e_628390256_775248105101881_4311850404359574616_n.jpg', 'approved', 'approved', NULL, 2, 2, '2026-03-08 05:50:46', '2026-03-08 05:51:20');
+
+INSERT INTO `product_verification_media` (`id`, `product_id`, `media_type`, `file_url`, `uploaded_at`) VALUES (1, 2, 'photo', 'verification_photo_sample_1.jpg', '2026-03-08 05:50:46');
+INSERT INTO `product_verification_media` (`id`, `product_id`, `media_type`, `file_url`, `uploaded_at`) VALUES (2, 2, 'photo', 'verification_photo_sample_2.jpg', '2026-03-08 05:50:46');
+INSERT INTO `product_verification_media` (`id`, `product_id`, `media_type`, `file_url`, `uploaded_at`) VALUES (3, 2, 'photo', 'verification_photo_sample_3.jpg', '2026-03-08 05:50:46');
+INSERT INTO `product_verification_media` (`id`, `product_id`, `media_type`, `file_url`, `uploaded_at`) VALUES (4, 2, 'video', 'verification_video_sample_1.mp4', '2026-03-08 05:50:46');
 
 INSERT INTO `orders` (`id`, `buyer_id`, `total_amount`, `status`, `payment_method`, `payment_status`, `delivery_address`, `tracking_number`, `notes`, `created_at`, `updated_at`) VALUES (1, 2, 1234.0, 'delivered', 'gcash', 'paid', '123 Rizal St, Quezon City', 'GSH-5T153TV2BD', '', '2026-03-08 05:42:38', '2026-03-08 05:43:31');
 

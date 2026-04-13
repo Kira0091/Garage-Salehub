@@ -2,6 +2,7 @@
 // ALL item submission, photo/video upload, and price negotiation happens here.
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { io } from "socket.io-client";
 import { chatAPI, productsAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { alertError, alertSuccess } from "../utils/alerts";
@@ -80,6 +81,7 @@ export default function ChatPage() {
   const fileInputRef = useRef(null);
   const itemFileRef = useRef(null);
   const pollRef = useRef(null);
+  const socketRef = useRef(null);
   const textareaRef = useRef(null);
 
   // â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -94,9 +96,44 @@ export default function ChatPage() {
     pollRef.current = setInterval(() => {
       loadConversations(false);
       if (selectedPartnerRef.current) loadMessages(selectedPartnerRef.current.id, false);
-    }, 5000);
+    }, 3000);
     return () => clearInterval(pollRef.current);
   }, [user]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const socket = io("http://localhost:5000", { transports: ["websocket", "polling"] });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      socket.emit("join", { user_id: user.id });
+    });
+
+    socket.on("new_message", (message) => {
+      const partnerId = selectedPartnerRef.current?.id;
+      if (!partnerId) return;
+      const belongsToOpenThread =
+        (message.sender_id === partnerId && message.receiver_id === user.id) ||
+        (message.sender_id === user.id && message.receiver_id === partnerId);
+      if (belongsToOpenThread) {
+        setMessages((prev) => {
+          if (prev.some((item) => item.id === message.id)) return prev;
+          return [...prev, message];
+        });
+      }
+      loadConversations(false);
+    });
+
+    socket.on("unread_update", (payload) => {
+      if (payload?.user_id !== user.id) return;
+      localStorage.setItem("chat_unread", String(payload.count || 0));
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user || user.role !== "admin") return;
@@ -151,6 +188,7 @@ export default function ChatPage() {
       if (showLoad) setMsgLoading(true);
       const data = await chatAPI.messages(partnerId);
       setMessages(data);
+      socketRef.current?.emit("mark_read", { reader_id: user?.id, partner_id: partnerId });
     } finally {
       if (showLoad) setMsgLoading(false);
     }
@@ -914,8 +952,6 @@ const S = {
   },
   uploadBox: { border: "2px dashed var(--gray-300)", borderRadius: 10, cursor: "pointer", minHeight: 80, transition: "border-color 0.15s" },
 };
-
-
 
 
 

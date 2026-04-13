@@ -4,6 +4,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  --ui-scale: 0.8;
   --red: #D10000;
   --red-dark: #A00000;
   --red-light: #ff2020;
@@ -29,6 +30,19 @@
   --radius: 10px;
   --radius-lg: 16px;
   --transition: 0.18s ease;
+}
+
+#root {
+  zoom: var(--ui-scale);
+}
+
+@supports not (zoom: 1) {
+  #root {
+    transform: scale(var(--ui-scale));
+    transform-origin: top left;
+    width: calc(100% / var(--ui-scale));
+    min-height: calc(100vh / var(--ui-scale));
+  }
 }
 
 body {

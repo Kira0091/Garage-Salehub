@@ -19,13 +19,17 @@ export default function ShopPage() {
 
   const page = parseInt(searchParams.get("page") || "1");
   const status = searchParams.get("status") || "approved";
+  const deals = searchParams.get("deals") === "1";
   const search = searchParams.get("search") || "";
   const category_id = searchParams.get("category_id") || "";
   const min_price = searchParams.get("min_price") || "";
   const max_price = searchParams.get("max_price") || "";
   const condition = searchParams.get("condition") || "";
   const location = searchParams.get("location") || "";
-  const sort = searchParams.get("sort") || "newest";
+  const sort = searchParams.get("sort") || (deals ? "discount_desc" : "newest");
+  const near_lat = searchParams.get("near_lat") || "";
+  const near_lng = searchParams.get("near_lng") || "";
+  const radius_km = searchParams.get("radius_km") || "15";
   const [localSearch, setLocalSearch] = useState(search);
   const [localLocation, setLocalLocation] = useState(location);
   const [localMin, setLocalMin] = useState(min_price);
@@ -51,6 +55,7 @@ export default function ShopPage() {
   useEffect(() => {
     setLoading(true);
     const params = { status, page, per_page: 12 };
+    if (deals) params.deals = "1";
     if (search) params.search = search;
     if (category_id) params.category_id = category_id;
     if (min_price) params.min_price = min_price;
@@ -58,10 +63,13 @@ export default function ShopPage() {
     if (condition) params.condition = condition;
     if (location) params.location = location;
     if (sort) params.sort = sort;
+    if (near_lat) params.near_lat = near_lat;
+    if (near_lng) params.near_lng = near_lng;
+    if (radius_km) params.radius_km = radius_km;
     productsAPI.getAll(params)
       .then((data) => { setProducts(data.products); setTotal(data.total); setPages(data.pages); })
       .finally(() => setLoading(false));
-  }, [page, status, search, category_id, min_price, max_price, condition, location, sort]);
+  }, [page, status, deals, search, category_id, min_price, max_price, condition, location, sort, near_lat, near_lng, radius_km]);
 
   const updateParam = (key, val) => {
     const p = new URLSearchParams(searchParams);
@@ -133,10 +141,47 @@ export default function ShopPage() {
                 </div>
                 <select className="input-field" value={sort} onChange={(e) => updateParam("sort", e.target.value)}>
                   <option value="newest">Newest</option>
+                  <option value="discount_desc">Biggest Discount</option>
                   <option value="price_asc">Price: Low to High</option>
                   <option value="price_desc">Price: High to Low</option>
                   <option value="views_desc">Most Viewed</option>
                 </select>
+                <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr", gap: 8 }}>
+                  <input
+                    className="input-field"
+                    type="number"
+                    min="1"
+                    value={radius_km}
+                    onChange={(e) => updateParam("radius_km", e.target.value)}
+                    placeholder="Radius km"
+                  />
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      if (!navigator.geolocation) return;
+                      navigator.geolocation.getCurrentPosition((position) => {
+                        const p = new URLSearchParams(searchParams);
+                        p.set("near_lat", String(position.coords.latitude));
+                        p.set("near_lng", String(position.coords.longitude));
+                        p.delete("page");
+                        setSearchParams(p);
+                      });
+                    }}
+                  >
+                    Near me
+                  </button>
+                </div>
+                {(near_lat && near_lng) && (
+                  <button className="btn btn-outline btn-sm" onClick={() => {
+                    const p = new URLSearchParams(searchParams);
+                    p.delete("near_lat");
+                    p.delete("near_lng");
+                    p.delete("page");
+                    setSearchParams(p);
+                  }}>
+                    Clear near-me filter
+                  </button>
+                )}
                 <button className="btn btn-outline" style={{ width: "100%" }} onClick={applyFilters}>Apply Filters</button>
               </div>
             </div>
@@ -158,7 +203,17 @@ export default function ShopPage() {
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={() => { setLocalSearch(""); setLocalLocation(""); setLocalMin(""); setLocalMax(""); setSearchParams({}); }}
+                  onClick={() => {
+                    setLocalSearch("");
+                    setLocalLocation("");
+                    setLocalMin("");
+                    setLocalMax("");
+                    if (deals) {
+                      setSearchParams({ deals: "1", status: "approved" });
+                    } else {
+                      setSearchParams({});
+                    }
+                  }}
                 >
                   Clear
                 </button>
@@ -166,6 +221,11 @@ export default function ShopPage() {
             </form>
 
             <div style={styles.resultsHeader}>
+              <div style={{ marginBottom: 8 }}>
+                <span className={`badge ${deals ? "badge-red" : "badge-blue"}`}>
+                  {deals ? "Limited-Time Deals" : "All Listings"}
+                </span>
+              </div>
               <span style={{ fontSize: 14, color: "var(--gray-500)" }}>
                 {total} item{total !== 1 ? "s" : ""} found
                 {search && ` for "${search}"`}

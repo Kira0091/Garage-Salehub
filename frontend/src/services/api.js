@@ -20,6 +20,37 @@ const handleResponse = async (res) => {
   return data;
 };
 
+const uploadWithProgress = (url, formData, onProgress) =>
+  new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url, true);
+
+    const token = localStorage.getItem("token");
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.withCredentials = true;
+
+    xhr.upload.onprogress = (event) => {
+      if (!onProgress || !event.lengthComputable) return;
+      onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+
+    xhr.onload = () => {
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText || "{}");
+      } catch (_err) {
+        data = {};
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data);
+      } else {
+        reject(new Error(data.error || "Request failed"));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network request failed"));
+    xhr.send(formData);
+  });
+
 // Auth
 export const authAPI = {
   register: (body) =>
@@ -32,6 +63,8 @@ export const authAPI = {
     fetch(`${BASE_URL}/auth/me`, withCredentials({ method: "PUT", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
   logout: () =>
     fetch(`${BASE_URL}/auth/logout`, withCredentials({ method: "POST", headers: getHeaders() })).then(handleResponse),
+  validate: () =>
+    fetch(`${BASE_URL}/auth/validate`, withCredentials({ headers: getHeaders() })).then(handleResponse),
 };
 
 // Products
@@ -48,10 +81,22 @@ export const productsAPI = {
       headers: getHeaders(false),
       body: formData,
     })).then(handleResponse),
+  createWithProgress: (formData, onProgress) =>
+    uploadWithProgress(`${BASE_URL}/products/`, formData, onProgress),
   update: (id, body) =>
     fetch(`${BASE_URL}/products/${id}`, withCredentials({ method: "PUT", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+  uploadVerificationMedia: (id, formData, onProgress) =>
+    uploadWithProgress(`${BASE_URL}/products/${id}/verification-media`, formData, onProgress),
+  getVerificationStatus: (id) =>
+    fetch(`${BASE_URL}/products/${id}/verification-status`, withCredentials({ headers: getHeaders() })).then(handleResponse),
   delete: (id) =>
     fetch(`${BASE_URL}/products/${id}`, withCredentials({ method: "DELETE", headers: getHeaders() })).then(handleResponse),
+  comments: (id) =>
+    fetch(`${BASE_URL}/products/${id}/comments`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  addComment: (id, body) =>
+    fetch(`${BASE_URL}/products/${id}/comments`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+  recommendations: () =>
+    fetch(`${BASE_URL}/products/recommendations`, withCredentials({ headers: getHeaders() })).then(handleResponse),
   myProducts: () =>
     fetch(`${BASE_URL}/products/my`, withCredentials({ headers: getHeaders() })).then(handleResponse),
   categories: () =>
@@ -59,6 +104,7 @@ export const productsAPI = {
   createCategory: (body) =>
     fetch(`${BASE_URL}/products/categories`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
   imageUrl: (filename) => `${BASE_URL}/products/images/${filename}`,
+  verificationMediaUrl: (filename) => `${BASE_URL}/products/verification-media/${filename}`,
 };
 
 // Orders
@@ -119,6 +165,8 @@ export const notificationsAPI = {
     fetch(`${BASE_URL}/notifications/${id}/read`, withCredentials({ method: "PUT", headers: getHeaders() })).then(handleResponse),
   markAllRead: () =>
     fetch(`${BASE_URL}/notifications/read-all`, withCredentials({ method: "PUT", headers: getHeaders() })).then(handleResponse),
+  unreadCount: () =>
+    fetch(`${BASE_URL}/notifications/unread-count`, withCredentials({ headers: getHeaders() })).then(handleResponse),
 };
 
 // Reviews
@@ -127,6 +175,8 @@ export const reviewsAPI = {
     fetch(`${BASE_URL}/reviews/`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
   seller: (sellerId) =>
     fetch(`${BASE_URL}/reviews/seller/${sellerId}`).then(handleResponse),
+  product: (productId) =>
+    fetch(`${BASE_URL}/reviews/${productId}`).then(handleResponse),
   mine: () =>
     fetch(`${BASE_URL}/reviews/me`, withCredentials({ headers: getHeaders() })).then(handleResponse),
 };
@@ -135,6 +185,40 @@ export const reviewsAPI = {
 export const usersAPI = {
   analytics: () =>
     fetch(`${BASE_URL}/users/me/analytics`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  sellerDashboard: () =>
+    fetch(`${BASE_URL}/users/seller-dashboard`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+};
+
+export const vouchersAPI = {
+  create: (body) =>
+    fetch(`${BASE_URL}/vouchers/`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+  list: () =>
+    fetch(`${BASE_URL}/vouchers/`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  deactivate: (id) =>
+    fetch(`${BASE_URL}/vouchers/${id}`, withCredentials({ method: "DELETE", headers: getHeaders() })).then(handleResponse),
+  validate: (body) =>
+    fetch(`${BASE_URL}/vouchers/validate`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+};
+
+export const loyaltyAPI = {
+  get: () =>
+    fetch(`${BASE_URL}/loyalty/`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  redeem: (body) =>
+    fetch(`${BASE_URL}/loyalty/redeem`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+};
+
+export const reportsAPI = {
+  create: (formData) =>
+    fetch(`${BASE_URL}/reports/`, withCredentials({
+      method: "POST",
+      headers: getHeaders(false),
+      body: formData,
+    })).then(handleResponse),
+  mine: () =>
+    fetch(`${BASE_URL}/reports/`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  updateStatus: (id, body) =>
+    fetch(`${BASE_URL}/reports/${id}/status`, withCredentials({ method: "PUT", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+  screenshotUrl: (filename) => `${BASE_URL}/reports/screenshot/${filename}`,
 };
 
 // Admin
@@ -143,6 +227,10 @@ export const adminAPI = {
     fetch(`${BASE_URL}/admin/dashboard`, withCredentials({ headers: getHeaders() })).then(handleResponse),
   pendingProducts: () =>
     fetch(`${BASE_URL}/admin/products/pending`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  pendingVerifications: () =>
+    fetch(`${BASE_URL}/admin/pending-verifications`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  verifyProduct: (id, body) =>
+    fetch(`${BASE_URL}/admin/verify-product/${id}`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
   inventoryProducts: () =>
     fetch(`${BASE_URL}/admin/products/inventory`, withCredentials({ headers: getHeaders() })).then(handleResponse),
   approveProduct: (id, body = {}) =>
