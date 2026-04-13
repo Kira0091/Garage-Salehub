@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { productsAPI } from "../services/api";
 import { alertError, alertSuccess, confirmAction } from "../utils/alerts";
 import VerificationMediaUploader from "../components/VerificationMediaUploader";
 
-export default function SellPage() {
+export default function ProductEditPage() {
+  const { id } = useParams();
   const navigate = useNavigate();
-
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState([]);
-  const [sending, setSending] = useState(false);
-  const [previews, setPreviews] = useState([]);
+  const [verificationProgress, setVerificationProgress] = useState(null);
+  const [verificationPhotos, setVerificationPhotos] = useState([]);
+  const [verificationVideo, setVerificationVideo] = useState(null);
+  const [existingVerificationMedia, setExistingVerificationMedia] = useState(null);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -24,97 +28,102 @@ export default function SellPage() {
     city: "",
     country: "",
   });
-  const [files, setFiles] = useState([]);
-  const [verificationPhotos, setVerificationPhotos] = useState([]);
-  const [verificationVideo, setVerificationVideo] = useState(null);
-  const [verificationProgress, setVerificationProgress] = useState(null);
 
   useEffect(() => {
-    productsAPI.categories().then(setCategories).catch(() => setCategories([]));
-  }, []);
+    let mounted = true;
+    Promise.all([productsAPI.getOne(id), productsAPI.categories(), productsAPI.getVerificationStatus(id)])
+      .then(([product, cats, verification]) => {
+        if (!mounted) return;
+        setCategories(cats);
+        setExistingVerificationMedia(verification.media || null);
+        setForm({
+          title: product.title || "",
+          description: product.description || "",
+          condition: product.condition || "Good",
+          price: String(product.price || ""),
+          quantity: String(product.quantity || 1),
+          category_id: String(product.category?.id || ""),
+          location: product.location || "",
+          latitude: product.location_meta?.latitude != null ? String(product.location_meta.latitude) : "",
+          longitude: product.location_meta?.longitude != null ? String(product.location_meta.longitude) : "",
+          address: product.location_meta?.address || "",
+          city: product.location_meta?.city || "",
+          country: product.location_meta?.country || "",
+        });
+      })
+      .catch(async (err) => {
+        await alertError(err.message || "Unable to load product details.");
+        navigate("/my-products");
+      })
+      .finally(() => mounted && setLoading(false));
+    return () => {
+      mounted = false;
+    };
+  }, [id, navigate]);
 
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  const onFiles = (e) => {
-    const selected = Array.from(e.target.files || []).slice(0, 8);
-    setFiles(selected);
-    setPreviews(
-      selected.map((f) => ({
-        name: f.name,
-        url: URL.createObjectURL(f),
-      }))
-    );
-  };
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.title.trim() || !form.price || !form.category_id || files.length === 0) {
-      await alertError("Please complete title, price, category, and at least one image.", "Missing required fields");
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!form.title.trim() || !form.price || !form.category_id) {
+      await alertError("Please complete title, price, and category.", "Missing required fields");
       return;
     }
     if (verificationPhotos.length < 3 || !verificationVideo) {
-      await alertError("Verification media requires at least 3 photos and 1 video.", "Verification media required");
+      await alertError("Please upload at least 3 verification photos and 1 verification video.", "Verification media required");
       return;
     }
 
     const confirmed = await confirmAction({
-      title: "Submit this item for review?",
-      text: "Your item will be sent to admin for approval.",
-      confirmText: "Submit item",
-      confirmButtonColor: "#e11d48",
+      title: "Save and re-submit for verification?",
+      text: "This item will go back under review until admin approves it again.",
+      confirmText: "Save Changes",
+      confirmButtonColor: "#2563eb",
     });
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
-    setSending(true);
+    setSaving(true);
     setVerificationProgress(null);
     try {
-      const fd = new FormData();
-      fd.append("title", form.title.trim());
-      fd.append("description", form.description.trim());
-      fd.append("condition", form.condition);
-      fd.append("price", form.price);
-      fd.append("quantity", form.quantity || "1");
-      fd.append("category_id", form.category_id);
-      if (form.location) fd.append("location", form.location);
-      if (form.latitude) fd.append("latitude", form.latitude);
-      if (form.longitude) fd.append("longitude", form.longitude);
-      if (form.address) fd.append("address", form.address);
-      if (form.city) fd.append("city", form.city);
-      if (form.country) fd.append("country", form.country);
-      files.forEach((f) => fd.append("images", f));
-
-      const created = await productsAPI.create(fd);
+      await productsAPI.update(id, {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        condition: form.condition,
+        price: Number(form.price),
+        quantity: Number(form.quantity || 1),
+        category_id: Number(form.category_id),
+        location: form.location.trim(),
+        latitude: form.latitude ? Number(form.latitude) : null,
+        longitude: form.longitude ? Number(form.longitude) : null,
+        address: form.address.trim(),
+        city: form.city.trim(),
+        country: form.country.trim(),
+      });
 
       const verificationFd = new FormData();
       verificationPhotos.forEach((file) => verificationFd.append("verification_photos", file));
       verificationFd.append("verification_video", verificationVideo);
-
-      try {
-        await productsAPI.uploadVerificationMedia(created.id, verificationFd, setVerificationProgress);
-      } catch (uploadErr) {
-        await productsAPI.delete(created.id);
-        throw uploadErr;
-      }
+      await productsAPI.uploadVerificationMedia(id, verificationFd, setVerificationProgress);
 
       localStorage.setItem("my_products_refresh", String(Date.now()));
-      await alertSuccess("Item submitted", "Your listing and verification media were sent for admin review.");
+      await alertSuccess("Updated", "Product details were updated and re-submitted for verification.");
       navigate("/my-products");
     } catch (err) {
-      await alertError(err.message || "Submission failed");
+      await alertError(err.message || "Update failed");
     } finally {
-      setSending(false);
+      setSaving(false);
       setVerificationProgress(null);
     }
   };
+
+  if (loading) return <div className="loading-center"><div className="spinner" /></div>;
 
   return (
     <div className="page">
       <div className="container" style={{ maxWidth: 900 }}>
         <div className="page-header">
-          <h1 className="page-title">Submit an Item</h1>
-          <p className="page-subtitle">This is separate from Messages. Submit here, then track status in My Submissions.</p>
+          <h1 className="page-title">Edit Product</h1>
+          <p className="page-subtitle">Update details and upload fresh verification media.</p>
         </div>
 
         <form className="card" style={{ padding: 20 }} onSubmit={submit}>
@@ -147,9 +156,9 @@ export default function SellPage() {
               <label>Category *</label>
               <select className="input-field" value={form.category_id} onChange={(e) => setField("category_id", e.target.value)}>
                 <option value="">Select category</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
                   </option>
                 ))}
               </select>
@@ -157,17 +166,17 @@ export default function SellPage() {
 
             <div className="input-group">
               <label>Location</label>
-              <input className="input-field" placeholder="e.g. Makati City" value={form.location} onChange={(e) => setField("location", e.target.value)} />
+              <input className="input-field" value={form.location} onChange={(e) => setField("location", e.target.value)} />
             </div>
 
             <div className="input-group">
               <label>Latitude</label>
-              <input className="input-field" type="number" step="any" placeholder="14.5995" value={form.latitude} onChange={(e) => setField("latitude", e.target.value)} />
+              <input className="input-field" type="number" step="any" value={form.latitude} onChange={(e) => setField("latitude", e.target.value)} />
             </div>
 
             <div className="input-group">
               <label>Longitude</label>
-              <input className="input-field" type="number" step="any" placeholder="120.9842" value={form.longitude} onChange={(e) => setField("longitude", e.target.value)} />
+              <input className="input-field" type="number" step="any" value={form.longitude} onChange={(e) => setField("longitude", e.target.value)} />
             </div>
 
             <div className="input-group">
@@ -221,16 +230,7 @@ export default function SellPage() {
                 rows={4}
                 value={form.description}
                 onChange={(e) => setField("description", e.target.value)}
-                placeholder="Describe brand, model, condition details, and inclusions"
               />
-            </div>
-
-            <div className="input-group" style={{ gridColumn: "1 / -1" }}>
-              <label>Images * (up to 8)</label>
-              <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 6 }}>
-                These are your public listing photos shown to buyers in Shop and Product pages.
-              </div>
-              <input className="input-field" type="file" accept="image/*" multiple onChange={onFiles} />
             </div>
 
             <VerificationMediaUploader
@@ -239,23 +239,16 @@ export default function SellPage() {
               videoFile={verificationVideo}
               setVideoFile={setVerificationVideo}
               uploadProgress={verificationProgress}
+              existingMedia={existingVerificationMedia}
             />
           </div>
 
-          {previews.length > 0 && (
-            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-              {previews.map((p) => (
-                <img key={p.url} src={p.url} alt={p.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
-              ))}
-            </div>
-          )}
-
           <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
-            <button type="button" className="btn btn-ghost" onClick={() => navigate("/chat")}>
-              Open Messages
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={sending}>
-              {sending ? "Submitting..." : "Submit Item"}
+            <Link to="/my-products" className="btn btn-ghost">
+              Cancel
+            </Link>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? "Saving..." : "Save & Re-submit"}
             </button>
           </div>
         </form>

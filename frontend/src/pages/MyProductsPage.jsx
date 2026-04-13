@@ -6,19 +6,21 @@ import { alertError, alertSuccess, confirmAction } from "../utils/alerts";
 import Icon from "../components/Icon";
 
 const statusBadge = {
-  pending: "badge-yellow",
+  pending_verification: "badge-yellow",
   approved: "badge-green",
   rejected: "badge-red",
   sold: "badge-gray",
   inventory: "badge-blue",
+  pending: "badge-yellow",
 };
 
 const statusLabel = {
-  pending: "Pending Review",
-  approved: "Approved",
+  pending_verification: "Under review",
+  approved: "Active",
   rejected: "Rejected",
   sold: "Sold",
   inventory: "In Inventory",
+  pending: "Pending Review",
 };
 
 export default function MyProductsPage() {
@@ -75,9 +77,9 @@ export default function MyProductsPage() {
 
   const stats = {
     total: products.length,
-    pending: products.filter((p) => p.status === "pending").length,
-    approved: products.filter((p) => p.status === "approved").length,
-    rejected: products.filter((p) => p.status === "rejected").length,
+    pending: products.filter((p) => p.verification_status === "pending_verification" || p.status === "pending").length,
+    approved: products.filter((p) => p.verification_status === "approved" || p.status === "approved").length,
+    rejected: products.filter((p) => p.verification_status === "rejected" || p.status === "rejected").length,
     sold: products.filter((p) => p.status === "sold").length,
   };
 
@@ -136,6 +138,9 @@ export default function MyProductsPage() {
                 <tbody>
                   {products.map((p) => {
                     const img = p.images?.[0] ? productsAPI.imageUrl(p.images[0]) : null;
+                    const displayStatus = p.status === "sold" || p.status === "inventory"
+                      ? p.status
+                      : (p.verification_status || p.status);
                     return (
                       <tr key={p.id}>
                         <td>
@@ -153,17 +158,24 @@ export default function MyProductsPage() {
                         <td style={{ fontSize: 12, color: "var(--gray-500)" }}>{p.location || "-"}</td>
                         <td style={{ fontSize: 12, color: "var(--gray-500)" }}>{p.view_count || 0}</td>
                         <td>
-                          <span className={`badge ${statusBadge[p.status]}`}>{statusLabel[p.status]}</span>
-                          {p.status === "rejected" && p.rejection_reason && (
-                            <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>{p.rejection_reason}</div>
+                          <span className={`badge ${statusBadge[displayStatus]}`}>{statusLabel[displayStatus]}</span>
+                          {displayStatus === "rejected" && p.rejection_reason && (
+                            <div style={{ fontSize: 11, color: "var(--red)", marginTop: 4 }}>
+                              Rejected: {p.rejection_reason}
+                            </div>
                           )}
                         </td>
                         <td style={{ fontSize: 12, color: "var(--gray-500)" }}>{new Date(p.created_at).toLocaleDateString("en-PH")}</td>
                         <td>
                           <div style={{ display: "flex", gap: 6 }}>
                             <Link to={`/product/${p.id}`} className="btn btn-ghost btn-sm">View</Link>
-                            {p.status === "pending" && (
+                            {(displayStatus === "pending_verification" || displayStatus === "pending") && (
                               <button className="btn btn-sm" style={{ background: "#fee2e2", color: "var(--red)", border: "none" }} onClick={() => handleDelete(p.id)}>Delete</button>
+                            )}
+                            {displayStatus === "rejected" && (
+                              <Link to={`/my-products/${p.id}/edit`} className="btn btn-sm" style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
+                                Edit & Resubmit
+                              </Link>
                             )}
                           </div>
                         </td>

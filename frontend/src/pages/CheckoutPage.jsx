@@ -1,9 +1,9 @@
 ﻿// src/pages/CheckoutPage.jsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { ordersAPI } from "../services/api";
+import { loyaltyAPI, ordersAPI, vouchersAPI } from "../services/api";
 import { alertError, alertInfo, alertSuccess, confirmAction } from "../utils/alerts";
 import Icon from "../components/Icon";
 
@@ -26,6 +26,44 @@ export default function CheckoutPage() {
   const [order, setOrder] = useState(null);
   const [cardNum, setCardNum] = useState("");
   const [gcashNum, setGcashNum] = useState("");
+  const [voucherCode, setVoucherCode] = useState("");
+  const [voucherData, setVoucherData] = useState(null);
+  const [voucherError, setVoucherError] = useState("");
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [usePoints, setUsePoints] = useState(false);
+  const [pointsInput, setPointsInput] = useState(0);
+
+  const subtotal = total;
+  const voucherDiscount = Math.min(voucherData?.discount || 0, subtotal);
+  const maxPointsApplicable = Math.max(0, Math.floor(subtotal - voucherDiscount));
+  const pointsToUse = usePoints ? Math.max(0, Math.min(Number(pointsInput || 0), loyaltyPoints, maxPointsApplicable)) : 0;
+  const pointsDiscount = pointsToUse;
+  const finalTotal = Math.max(0, subtotal - voucherDiscount - pointsDiscount);
+
+  useEffect(() => {
+    loyaltyAPI.get().then((data) => {
+      const p = data.points || 0;
+      setLoyaltyPoints(p);
+      setPointsInput(p);
+    }).catch(() => {});
+  }, []);
+
+  const applyVoucher = async () => {
+    const code = voucherCode.trim().toUpperCase();
+    if (!code) {
+      setVoucherError("Enter a voucher code.");
+      setVoucherData(null);
+      return;
+    }
+    try {
+      const data = await vouchersAPI.validate({ code, order_total: subtotal });
+      setVoucherData(data);
+      setVoucherError("");
+    } catch (err) {
+      setVoucherData(null);
+      setVoucherError(err.message || "Invalid voucher");
+    }
+  };
 
   const handlePlaceOrder = async () => {
     const confirmed = await confirmAction({
@@ -42,6 +80,8 @@ export default function CheckoutPage() {
         items: cart.map((i) => ({ product_id: i.product.id, quantity: i.quantity })),
         delivery_address: address,
         payment_method: payMethod,
+        voucher_code: voucherData?.code || null,
+        points_used: pointsToUse || 0,
       });
 
       if (payMethod !== "cod") {
@@ -72,7 +112,9 @@ export default function CheckoutPage() {
               <div style={styles.orderRow}><span>Order ID</span><strong>#{order.id}</strong></div>
               <div style={styles.orderRow}><span>Tracking</span><strong>{order.tracking_number}</strong></div>
               <div style={styles.orderRow}><span>Payment</span><strong style={{ textTransform: "capitalize" }}>{payMethod === "cod" ? "Cash on Delivery" : `${payMethod.toUpperCase()} (Simulated)`}</strong></div>
-              <div style={styles.orderRow}><span>Total</span><strong style={{ color: "var(--red)" }}>PHP {total.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong></div>
+              {order.voucher_code && <div style={styles.orderRow}><span>Voucher</span><strong>{order.voucher_code}</strong></div>}
+              {Number(order.discount_amount || 0) > 0 && <div style={styles.orderRow}><span>Total Discount</span><strong style={{ color: "var(--green)" }}>- PHP {Number(order.discount_amount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong></div>}
+              <div style={styles.orderRow}><span>Final Total</span><strong style={{ color: "var(--red)" }}>PHP {Number(order.total_amount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong></div>
             </div>
             <button className="btn btn-primary btn-lg" style={{ width: "100%", marginTop: 24 }} onClick={() => navigate("/orders")}>
               View My Orders
@@ -167,6 +209,37 @@ export default function CheckoutPage() {
                   <button className="btn btn-ghost" onClick={() => setStep(1)}>Back</button>
                   <button className="btn btn-primary btn-lg" style={{ flex: 1 }} onClick={() => setStep(3)}>Review Order</button>
                 </div>
+
+                <div style={{ marginTop: 18, borderTop: "1px solid var(--gray-200)", paddingTop: 14 }}>
+                  <h4 style={{ marginBottom: 10 }}>Voucher</h4>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input className="input-field" placeholder="Enter voucher code" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value.toUpperCase())} />
+                    <button className="btn btn-outline" onClick={applyVoucher}>Apply</button>
+                  </div>
+                  {voucherData && <div style={{ color: "var(--green)", fontSize: 12, marginTop: 6 }}>Voucher applied: - PHP {voucherDiscount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</div>}
+                  {voucherError && <div style={{ color: "var(--red)", fontSize: 12, marginTop: 6 }}>{voucherError}</div>}
+
+                  <h4 style={{ margin: "14px 0 8px" }}>Loyalty Points</h4>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <input type="checkbox" checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)} />
+                    Use my points (You have {loyaltyPoints} = PHP {loyaltyPoints} off)
+                  </label>
+                  {usePoints && (
+                    <div style={{ marginTop: 8 }}>
+                      <input
+                        className="input-field"
+                        type="number"
+                        min="0"
+                        max={Math.min(loyaltyPoints, maxPointsApplicable)}
+                        value={pointsInput}
+                        onChange={(e) => setPointsInput(e.target.value)}
+                      />
+                      <div style={{ fontSize: 12, color: "var(--gray-500)", marginTop: 4 }}>
+                        Max usable now: {Math.min(loyaltyPoints, maxPointsApplicable)}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -175,6 +248,10 @@ export default function CheckoutPage() {
                 <h3 style={{ marginBottom: 20 }}>Confirm Order</h3>
                 <div style={styles.confirmRow}><span>Delivery to:</span><strong>{address}</strong></div>
                 <div style={styles.confirmRow}><span>Payment:</span><strong>{PAYMENT_METHODS.find((m) => m.id === payMethod)?.label}</strong></div>
+                <div style={styles.confirmRow}><span>Subtotal:</span><strong>PHP {subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong></div>
+                <div style={styles.confirmRow}><span>Voucher Discount:</span><strong style={{ color: "var(--green)" }}>- PHP {voucherDiscount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong></div>
+                <div style={styles.confirmRow}><span>Points Discount:</span><strong style={{ color: "var(--green)" }}>- PHP {pointsDiscount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong></div>
+                <div style={styles.confirmRow}><span>Final Total:</span><strong style={{ color: "var(--red)" }}>PHP {finalTotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</strong></div>
                 {payMethod !== "cod" && (
                   <div style={{ background: "#fef9c3", border: "1px solid #fde68a", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "var(--yellow)" }}>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="alert" size={14} color="var(--yellow)" /> This is a <strong>simulated payment</strong>. No real money will be charged.</span>
@@ -202,8 +279,8 @@ export default function CheckoutPage() {
               );
             })}
             <div style={{ borderTop: "1px solid var(--gray-200)", paddingTop: 14, marginTop: 8, display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontWeight: 700 }}>Total</span>
-              <span style={{ fontSize: 20, fontWeight: 800, color: "var(--red)", fontFamily: "Syne" }}>PHP {total.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+              <span style={{ fontWeight: 700 }}>Final Total</span>
+              <span style={{ fontSize: 20, fontWeight: 800, color: "var(--red)", fontFamily: "Syne" }}>PHP {finalTotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
             </div>
           </div>
         </div>

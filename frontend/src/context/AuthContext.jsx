@@ -18,9 +18,21 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key !== "token" && event.key !== "auth_sync") return;
+      authAPI.me()
+        .then(setUser)
+        .catch(() => setUser(null));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const login = async (email, password) => {
     const data = await authAPI.login({ email, password });
     if (data.token) localStorage.setItem("token", data.token);
+    localStorage.setItem("auth_sync", String(Date.now()));
     setUser(data.user);
     return data.user;
   };
@@ -28,6 +40,7 @@ export function AuthProvider({ children }) {
   const register = async (fields) => {
     const data = await authAPI.register(fields);
     if (data.token) localStorage.setItem("token", data.token);
+    localStorage.setItem("auth_sync", String(Date.now()));
     setUser(data.user);
     return data.user;
   };
@@ -37,6 +50,7 @@ export function AuthProvider({ children }) {
       await authAPI.logout();
     } catch {}
     localStorage.removeItem("token");
+    localStorage.setItem("auth_sync", String(Date.now()));
     setUser(null);
   };
 
@@ -45,8 +59,19 @@ export function AuthProvider({ children }) {
     setUser(u);
   };
 
+  const validateSession = async () => {
+    try {
+      await authAPI.validate();
+      return true;
+    } catch {
+      setUser(null);
+      localStorage.removeItem("token");
+      return false;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser, validateSession }}>
       {children}
     </AuthContext.Provider>
   );

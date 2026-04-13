@@ -2,13 +2,14 @@
 import { useEffect, useState } from "react";
 import { notificationsAPI } from "../services/api";
 import { useToast } from "../components/Toast";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Icon from "../components/Icon";
 
 export default function NotificationsPage() {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
+  const navigate = useNavigate();
 
   const load = () => {
     setLoading(true);
@@ -82,15 +83,31 @@ export default function NotificationsPage() {
                 justifyContent: "space-between",
                 gap: 12,
               }}>
-                <div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Icon name={iconForType(n.type)} size={14} color="var(--red)" />
+                  </div>
+                  <div>
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{n.title}</div>
                   <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 4 }}>{n.body}</div>
                   <div style={{ fontSize: 11, color: "var(--gray-400)", marginTop: 6 }}>
                     {new Date(n.created_at).toLocaleString("en-PH")}
                   </div>
+                  </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {n.link && <Link to={n.link} className="btn btn-sm btn-ghost">View</Link>}
+                  {!n.is_read && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--red)" }} />}
+                  {n.link && (
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={async () => {
+                        if (!n.is_read) await markRead(n.id);
+                        navigate(n.link);
+                      }}
+                    >
+                      View
+                    </button>
+                  )}
                   {!n.is_read && <button className="btn btn-sm btn-outline" onClick={() => markRead(n.id)}>Mark read</button>}
                 </div>
               </div>
@@ -100,4 +117,14 @@ export default function NotificationsPage() {
       </div>
     </div>
   );
+}
+
+function iconForType(type) {
+  const normalized = String(type || "").toLowerCase();
+  if (normalized.includes("order")) return "cart";
+  if (normalized.includes("voucher")) return "box";
+  if (normalized.includes("loyalty")) return "wallet";
+  if (normalized.includes("message")) return "message";
+  if (normalized.includes("review")) return "star";
+  return "bell";
 }

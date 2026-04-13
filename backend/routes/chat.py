@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from werkzeug.utils import secure_filename
 from database import db, Message, User, Product, Notification, Wishlist
-from auth_helpers import login_required, get_current_user_id
+from services.auth import login_required, get_current_user_id
+from utils.notifications import create_notification
 import os, uuid
 
 chat_bp = Blueprint("chat", __name__)
@@ -21,7 +22,7 @@ def get_receiver(sender, data):
             return None, "receiver_id required"
         r = User.query.get(rid)
         if not r or r.role == "admin":
-            return None, "Receiver must be a seller"
+            return None, "Receiver must be a non-admin user"
         return r, None
     else:
         admin = get_admin()
@@ -31,6 +32,7 @@ def get_receiver(sender, data):
 
 
 @chat_bp.route("/", methods=["POST"])
+@chat_bp.route("/send", methods=["POST"])
 @login_required
 def send_message():
     user_id = get_current_user_id()
@@ -76,6 +78,7 @@ def send_message():
             seller_id=user_id,
             location=item_data.get("location", ""),
             status="pending",
+            verification_status="pending_verification",
         )
         db.session.add(product)
         db.session.flush()
@@ -124,6 +127,13 @@ def send_message():
         if product and product.seller_id == user_id:
             product.negotiated_price = float(proposed_price)
             db.session.flush()
+            create_notification(
+                receiver.id,
+                "price_counter",
+                "Counter Offer Received",
+                f"New counter offer for {product.title}: PHP {float(proposed_price):,.2f}",
+                "/chat",
+            )
 
     msg = Message(
         sender_id=user_id,
@@ -136,14 +146,22 @@ def send_message():
     )
     db.session.add(msg)
     db.session.commit()
+    socketio = current_app.extensions.get("socketio")
+    if socketio:
+        room_sender = f"user_{user_id}"
+        room_receiver = f"user_{receiver.id}"
+        socketio.emit("new_message", msg.to_dict(), room=room_sender)
+        socketio.emit("new_message", msg.to_dict(), room=room_receiver)
+        unread = Message.query.filter_by(sender_id=user_id, receiver_id=receiver.id, is_read=False).count()
+        socketio.emit("unread_update", {"user_id": receiver.id, "count": unread}, room=room_receiver)
 
-    db.session.add(Notification(
-        user_id=receiver.id,
-        type="message",
-        title="New Message",
-        body=f"{sender.name} sent you a message.",
-        link="/chat",
-    ))
+    create_notification(
+        receiver.id,
+        "message",
+        "New Message",
+        f"{sender.name} sent you a message.",
+        "/chat",
+    )
     db.session.commit()
     return jsonify(msg.to_dict()), 201
 
@@ -197,6 +215,10 @@ def get_messages(partner_id):
     ).order_by(Message.created_at.asc()).all()
     Message.query.filter_by(sender_id=partner_id, receiver_id=user_id, is_read=False).update({"is_read": True})
     db.session.commit()
+    socketio = current_app.extensions.get("socketio")
+    if socketio:
+        unread = Message.query.filter_by(receiver_id=user_id, is_read=False).count()
+        socketio.emit("unread_update", {"user_id": user_id, "count": unread}, room=f"user_{user_id}")
     return jsonify([m.to_dict() for m in msgs]), 200
 
 

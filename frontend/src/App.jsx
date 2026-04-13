@@ -1,5 +1,5 @@
 // src/App.jsx
-import { Component, Suspense, lazy } from "react";
+import { Component, Suspense, lazy, useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
@@ -14,15 +14,19 @@ const CartPage = lazy(() => import("./pages/CartPage"));
 const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
 const SellPage = lazy(() => import("./pages/SellPage"));
 const MyProductsPage = lazy(() => import("./pages/MyProductsPage"));
+const ProductEditPage = lazy(() => import("./pages/ProductEditPage"));
 const OrdersPage = lazy(() => import("./pages/OrdersPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const AuthPage = lazy(() => import("./pages/AuthPages").then((m) => ({ default: m.AuthPage })));
 const LoginPage = lazy(() => import("./pages/AuthPages").then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("./pages/AuthPages").then((m) => ({ default: m.RegisterPage })));
 const WishlistPage = lazy(() => import("./pages/WishlistPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const SellerDashboardPage = lazy(() => import("./pages/SellerDashboardPage"));
+const LoyaltyPage = lazy(() => import("./pages/LoyaltyPage"));
+const ReportProblemPage = lazy(() => import("./pages/ReportProblemPage"));
 
 const isAdmin = (user) => String(user?.role || "").trim().toLowerCase() === "admin";
 
@@ -67,6 +71,26 @@ function ProtectedRoute({ children, adminOnly = false }) {
   return children;
 }
 
+function HomeEntry() {
+  return <HomePage />;
+}
+
+function AuthGuard({ children }) {
+  const location = useLocation();
+  const { user, validateSession } = useAuth();
+  const lastCheck = useRef(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const now = Date.now();
+    if (now - lastCheck.current < 15000) return;
+    lastCheck.current = now;
+    validateSession().catch(() => {});
+  }, [location.pathname, user, validateSession]);
+
+  return children;
+}
+
 function AppRoutes() {
   const { user } = useAuth();
   const location = useLocation();
@@ -81,21 +105,26 @@ function AppRoutes() {
       {!fromAdminChat && <Navbar />}
       <Suspense fallback={<div className="loading-center"><div className="spinner" /></div>}>
         <Routes>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<HomeEntry />} />
+          <Route path="/dashboard" element={<ProtectedRoute><SellerDashboardPage /></ProtectedRoute>} />
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/auth" element={<AuthPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
           <Route path="/sell" element={<ProtectedRoute><SellPage /></ProtectedRoute>} />
           <Route path="/my-products" element={<ProtectedRoute><MyProductsPage /></ProtectedRoute>} />
+          <Route path="/my-products/:id/edit" element={<ProtectedRoute><ProductEditPage /></ProtectedRoute>} />
           <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/wishlist" element={<ProtectedRoute><WishlistPage /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+          <Route path="/loyalty" element={<ProtectedRoute><LoyaltyPage /></ProtectedRoute>} />
           <Route path="/seller-dashboard" element={<ProtectedRoute><SellerDashboardPage /></ProtectedRoute>} />
+          <Route path="/report-problem" element={<ProtectedRoute><ReportProblemPage /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
@@ -112,7 +141,9 @@ export default function App() {
         <AuthProvider>
           <CartProvider>
             <ErrorBoundary>
-              <AppRoutes />
+              <AuthGuard>
+                <AppRoutes />
+              </AuthGuard>
             </ErrorBoundary>
           </CartProvider>
         </AuthProvider>

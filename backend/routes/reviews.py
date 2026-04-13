@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
-from database import db, Review, Order, Product, User, Notification
-from auth_helpers import login_required, get_current_user_id
+from database import db, Review, Order, Product, User
+from services.auth import login_required, get_current_user_id
+from utils.notifications import create_notification
+from utils.loyalty import add_loyalty_points
 
 reviews_bp = Blueprint("reviews", __name__)
 
@@ -53,13 +55,21 @@ def create_review():
     db.session.add(review)
     db.session.commit()
 
-    db.session.add(Notification(
-        user_id=product.seller_id,
-        type="review",
-        title="New Review Received",
-        body=f"You received a {review.rating}-star review for {product.title}.",
-        link=f"/product/{product.id}",
-    ))
+    create_notification(
+        product.seller_id,
+        "review",
+        "New Review Received",
+        f"You received a {review.rating}-star review for {product.title}.",
+        f"/product/{product.id}",
+    )
+    add_loyalty_points(
+        user_id,
+        10,
+        reason="review",
+        order_id=order_id,
+        notify_title="Points Earned",
+        notify_body="Thanks for leaving a review! You earned 10 points.",
+    )
     db.session.commit()
 
     return jsonify(review.to_dict()), 201
@@ -74,6 +84,16 @@ def get_seller_reviews(seller_id):
     return jsonify({
         "reviews": [r.to_dict() for r in reviews],
         "avg_rating": round(avg, 2),
+        "count": len(reviews),
+    }), 200
+
+
+@reviews_bp.route("/<int:product_id>", methods=["GET"])
+def get_product_reviews(product_id):
+    product = Product.query.get_or_404(product_id)
+    reviews = Review.query.filter_by(product_id=product.id).order_by(Review.created_at.desc()).all()
+    return jsonify({
+        "reviews": [r.to_dict() for r in reviews],
         "count": len(reviews),
     }), 200
 

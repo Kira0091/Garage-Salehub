@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify, session
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import create_access_token, set_access_cookies, unset_jwt_cookies
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import db, User
-from auth_helpers import login_required, get_current_user_id
+from services.auth import login_required, get_current_user_id
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -31,7 +31,9 @@ def register():
     session["user_id"] = user.id
     session["role"] = user.role
     session.permanent = True
-    return jsonify({"token": token, "user": user.to_dict()}), 201
+    response = jsonify({"token": token, "user": user.to_dict()})
+    set_access_cookies(response, token)
+    return response, 201
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -45,7 +47,9 @@ def login():
     session["user_id"] = user.id
     session["role"] = user.role
     session.permanent = True
-    return jsonify({"token": token, "user": user.to_dict()}), 200
+    response = jsonify({"token": token, "user": user.to_dict()})
+    set_access_cookies(response, token)
+    return response, 200
 
 
 @auth_bp.route("/me", methods=["GET"])
@@ -74,4 +78,12 @@ def update_me():
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()
-    return jsonify({"message": "Logged out"}), 200
+    response = jsonify({"message": "Logged out"})
+    unset_jwt_cookies(response)
+    return response, 200
+
+
+@auth_bp.route("/validate", methods=["GET"])
+@login_required
+def validate_session():
+    return jsonify({"valid": True}), 200
