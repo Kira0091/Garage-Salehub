@@ -12,6 +12,7 @@ const conditionColor = { "Like New": "var(--green)", "Good": "var(--blue)", "Fai
 export default function ProductCard({ product }) {
   const { addToCart } = useCart();
   const { user } = useAuth();
+  const isOwnProduct = Boolean(user?.id && product?.seller?.id && Number(user.id) === Number(product.seller.id));
   const price = product.negotiated_price || product.price;
   const hasDiscount = product.negotiated_price && product.negotiated_price < product.price;
   const imgSrc = product.images?.[0]
@@ -63,17 +64,23 @@ export default function ProductCard({ product }) {
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button
-            className="btn btn-primary"
-            style={{ flex: 1 }}
-            disabled={product.stock === 0}
-            onClick={() => {
-              addToCart(product);
-              alertSuccess("Added to cart", "Item added successfully.");
-            }}
-          >
-            {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
-          </button>
+          {isOwnProduct ? (
+            <button className="btn btn-ghost" style={{ flex: 1 }} disabled>
+              Your Listing
+            </button>
+          ) : (
+            <button
+              className="btn btn-primary"
+              style={{ flex: 1 }}
+              disabled={product.stock === 0}
+              onClick={() => {
+                addToCart(product);
+                alertSuccess("Added to cart", "Item added successfully.");
+              }}
+            >
+              {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
+            </button>
+          )}
           {user && (
             <button
               className="btn btn-ghost"

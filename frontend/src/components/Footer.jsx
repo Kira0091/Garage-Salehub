@@ -42,9 +42,7 @@ export default function Footer() {
         <div style={styles.bottom}>
           <p style={styles.copy}>© 2026 GarageSaleHub. All rights reserved. Presented by Group 11.</p>
           <div style={styles.badges}>
-            <span style={styles.payBadge}>COD</span>
-            <span style={styles.payBadge}>GCash</span>
-            <span style={styles.payBadge}>Card</span>
+         
           </div>
         </div>
       </div>

@@ -106,6 +106,7 @@ export default function ProductDetailPage() {
   if (!product) return null;
 
   const price = product.negotiated_price || product.price;
+  const isOwnProduct = Boolean(user?.id && product?.seller?.id && Number(user.id) === Number(product.seller.id));
   const hasDiscount = product.negotiated_price && product.negotiated_price < product.price;
   const imgs = product.images.length > 0
     ? product.images.map((img) => productsAPI.imageUrl(img))
@@ -200,7 +201,7 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {product.stock > 0 && (
+            {product.stock > 0 && !isOwnProduct && (
               <div style={styles.qtyRow}>
                 <label style={{ fontSize: 14, fontWeight: 600 }}>Quantity:</label>
                 <div style={styles.qtyControl}>
@@ -212,14 +213,20 @@ export default function ProductDetailPage() {
             )}
 
             <div style={styles.actions}>
-              <button
-                className="btn btn-primary btn-lg"
-                style={{ flex: 1 }}
-                disabled={product.stock === 0}
-                onClick={handleAddToCart}
-              >
-                🛒 Add to Cart
-              </button>
+              {isOwnProduct ? (
+                <button className="btn btn-ghost btn-lg" style={{ flex: 1 }} disabled>
+                  This is your listing
+                </button>
+              ) : (
+                <button
+                  className="btn btn-primary btn-lg"
+                  style={{ flex: 1 }}
+                  disabled={product.stock === 0}
+                  onClick={handleAddToCart}
+                >
+                  🛒 Add to Cart
+                </button>
+              )}
               {user && (
                 <button
                   className="btn btn-ghost btn-lg"
@@ -338,3 +345,4 @@ const styles = {
   actions: { display: "flex", gap: 12, marginBottom: 20 },
   chatBox: { background: "var(--gray-50)", borderRadius: "var(--radius)", padding: 16, border: "1px solid var(--gray-200)" },
 };
+
