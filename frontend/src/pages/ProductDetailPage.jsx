@@ -1,16 +1,35 @@
-// src/pages/ProductDetailPage.jsx
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { productsAPI, reviewsAPI, wishlistAPI, ordersAPI } from "../services/api";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ordersAPI, productsAPI, reviewsAPI, wishlistAPI } from "../services/api";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { alertError, alertSuccess } from "../utils/alerts";
 
+const conditionColors = { "Like New": "var(--green)", "Good": "var(--blue)", "Fair": "var(--yellow)" };
+const submissionStatusLabel = {
+  pending_verification: "Under review",
+  approved: "Approved",
+  rejected: "Rejected",
+  sold: "Sold",
+  inventory: "In Negotiation",
+  pending: "Pending Review",
+};
+const submissionStatusClass = {
+  pending_verification: "badge-yellow",
+  approved: "badge-green",
+  rejected: "badge-red",
+  sold: "badge-gray",
+  inventory: "badge-blue",
+  pending: "badge-yellow",
+};
+
 export default function ProductDetailPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { addToCart } = useCart();
-  const navigate = useNavigate();
+
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeImg, setActiveImg] = useState(0);
@@ -28,14 +47,16 @@ export default function ProductDetailPage() {
       .then(setProduct)
       .catch(() => navigate("/shop"))
       .finally(() => setLoading(false));
-  }, [id]); 
+  }, [id, navigate]);
 
   useEffect(() => {
     if (!product?.seller?.id) return;
-    reviewsAPI.seller(product.seller.id).then((data) => {
-      setReviews(data.reviews || []);
-      setRatingInfo({ avg: data.avg_rating, count: data.count });
-    }).catch(() => {});
+    reviewsAPI.seller(product.seller.id)
+      .then((data) => {
+        setReviews(data.reviews || []);
+        setRatingInfo({ avg: data.avg_rating, count: data.count });
+      })
+      .catch(() => {});
   }, [product?.seller?.id]);
 
   useEffect(() => {
@@ -48,8 +69,8 @@ export default function ProductDetailPage() {
     if (!user) return;
     ordersAPI.getAll()
       .then((orders) => {
-        const delivered = orders.find((o) =>
-          o.status === "delivered" && o.items.some((i) => i.product?.id === Number(id))
+        const delivered = orders.find((order) =>
+          order.status === "delivered" && order.items.some((item) => item.product?.id === Number(id))
         );
         setOrderId(delivered ? delivered.id : null);
       })
@@ -78,8 +99,8 @@ export default function ProductDetailPage() {
       const data = await reviewsAPI.seller(product.seller.id);
       setReviews(data.reviews || []);
       setRatingInfo({ avg: data.avg_rating, count: data.count });
-    } catch (e) {
-      await alertError(e.message || "Review submission failed");
+    } catch (error) {
+      await alertError(error.message || "Review submission failed");
     }
   };
 
@@ -106,19 +127,21 @@ export default function ProductDetailPage() {
   if (!product) return null;
 
   const price = product.negotiated_price || product.price;
-  const isOwnProduct = Boolean(user?.id && product?.seller?.id && Number(user.id) === Number(product.seller.id));
   const hasDiscount = product.negotiated_price && product.negotiated_price < product.price;
-  const imgs = product.images.length > 0
+  const imgs = product.images?.length
     ? product.images.map((img) => productsAPI.imageUrl(img))
     : ["https://placehold.co/500x400/f2f2f2/aaa?text=No+Image"];
-
-  const conditionColors = { "Like New": "var(--green)", "Good": "var(--blue)", "Fair": "var(--yellow)" };
+  const isOwnProduct = Boolean(user?.id && product?.seller?.id && Number(user.id) === Number(product.seller.id));
+  const fromSubmissions = String(searchParams.get("from") || "").toLowerCase() === "submissions";
+  const isSubmissionOwnView = isOwnProduct && fromSubmissions;
+  const submissionStatus = product.status === "sold" || product.status === "inventory"
+    ? product.status
+    : (product.verification_status || product.status);
 
   return (
     <div className="page">
       <div className="container">
         <div style={styles.layout}>
-          {/* Images */}
           <div style={styles.imgSection}>
             <div style={styles.mainImg}>
               <img src={imgs[activeImg]} alt={product.title} style={styles.mainImgEl} />
@@ -128,7 +151,7 @@ export default function ProductDetailPage() {
               <div style={styles.thumbs}>
                 {imgs.map((img, i) => (
                   <img
-                    key={i}
+                    key={img + i}
                     src={img}
                     alt=""
                     style={{ ...styles.thumb, ...(i === activeImg ? styles.thumbActive : {}) }}
@@ -139,7 +162,6 @@ export default function ProductDetailPage() {
             )}
           </div>
 
-          {/* Info */}
           <div style={styles.infoSection}>
             {product.category && (
               <div style={styles.breadcrumb}>{product.category.icon} {product.category.name}</div>
@@ -148,19 +170,19 @@ export default function ProductDetailPage() {
 
             <div style={styles.metaRow}>
               <span style={{ ...styles.condition, color: conditionColors[product.condition] || "var(--gray-500)" }}>
-                ● {product.condition}
+                {product.condition}
               </span>
               <span style={styles.sellerInfo}>
-                Sold by <strong>{product.seller.name}</strong>
-                {ratingInfo.avg && <span style={styles.rating}>★ {ratingInfo.avg} ({ratingInfo.count})</span>}
+                Sold by <strong>{product.seller?.name}</strong>
+                {ratingInfo.avg && <span style={styles.rating}>* {ratingInfo.avg} ({ratingInfo.count})</span>}
               </span>
             </div>
 
             <div style={styles.priceBlock}>
-              <span style={styles.price}>₱{price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+              <span style={styles.price}>PHP {price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
               {hasDiscount && (
                 <>
-                  <span style={styles.origPrice}>₱{product.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+                  <span style={styles.origPrice}>PHP {product.price.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
                   <span className="badge badge-red">
                     -{Math.round(((product.price - product.negotiated_price) / product.price) * 100)}% OFF
                   </span>
@@ -168,13 +190,29 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            <div style={styles.stockInfo}>
-              {product.stock > 0 ? (
-                <span className="badge badge-green">✓ In Stock ({product.stock} available)</span>
-              ) : (
-                <span className="badge badge-red">✗ Out of Stock</span>
-              )}
-            </div>
+            {!isSubmissionOwnView && (
+              <div style={styles.stockInfo}>
+                {product.stock > 0 ? (
+                  <span className="badge badge-green">In Stock ({product.stock} available)</span>
+                ) : (
+                  <span className="badge badge-red">Out of Stock</span>
+                )}
+              </div>
+            )}
+
+            {isSubmissionOwnView && (
+              <div style={{ marginBottom: 14 }}>
+                <span className={`badge ${submissionStatusClass[submissionStatus] || "badge-blue"}`}>
+                  Submission Status: {submissionStatusLabel[submissionStatus] || submissionStatus}
+                </span>
+                {submissionStatus === "rejected" && product.rejection_reason && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: "var(--red)" }}>
+                    Rejection reason: {product.rejection_reason}
+                  </div>
+                )}
+              </div>
+            )}
+
             {product.location && (
               <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 12 }}>
                 Location: {product.location}
@@ -205,7 +243,7 @@ export default function ProductDetailPage() {
               <div style={styles.qtyRow}>
                 <label style={{ fontSize: 14, fontWeight: 600 }}>Quantity:</label>
                 <div style={styles.qtyControl}>
-                  <button style={styles.qtyBtn} onClick={() => setQty(Math.max(1, qty - 1))}>−</button>
+                  <button style={styles.qtyBtn} onClick={() => setQty(Math.max(1, qty - 1))}>-</button>
                   <span style={styles.qtyNum}>{qty}</span>
                   <button style={styles.qtyBtn} onClick={() => setQty(Math.min(product.stock, qty + 1))}>+</button>
                 </div>
@@ -224,92 +262,96 @@ export default function ProductDetailPage() {
                   disabled={product.stock === 0}
                   onClick={handleAddToCart}
                 >
-                  🛒 Add to Cart
+                  Add to Cart
                 </button>
               )}
-              {user && (
+              {user && !isSubmissionOwnView && (
                 <button
                   className="btn btn-ghost btn-lg"
                   onClick={async () => {
                     try {
                       await wishlistAPI.add({ product_id: product.id });
                       await alertSuccess("Saved", "Item added to wishlist.");
-                    } catch (e) {
-                      await alertError(e.message || "Wishlist update failed");
+                    } catch (error) {
+                      await alertError(error.message || "Wishlist update failed");
                     }
                   }}
                 >
-                  ♡ Save
+                  Save
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        <div className="card" style={{ padding: 20, marginTop: 30 }}>
-          <h3 style={{ marginBottom: 12 }}>Reviews</h3>
-          {user && orderId && (
-            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr auto", gap: 10, alignItems: "center", marginBottom: 16 }}>
-              <select className="input-field" value={reviewRating} onChange={(e) => setReviewRating(parseInt(e.target.value, 10))}>
-                {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} Stars</option>)}
-              </select>
-              <input
-                className="input-field"
-                placeholder="Write a short review"
-                value={reviewComment}
-                onChange={(e) => setReviewComment(e.target.value)}
-              />
-              <button className="btn btn-primary" onClick={handleReviewSubmit}>Submit</button>
-            </div>
-          )}
-          {user && !orderId && (
-            <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 12 }}>
-              You can review this item only after your order is delivered.
-            </div>
-          )}
-          {reviews.length === 0 ? (
-            <div style={{ color: "var(--gray-500)", fontSize: 13 }}>No reviews yet.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {reviews.map((r) => (
-                <div key={r.id} style={{ borderBottom: "1px solid var(--gray-100)", paddingBottom: 10 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{r.buyer_name || "Buyer"} • {r.rating}★</div>
-                  <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 4 }}>{r.comment}</div>
+        {!isSubmissionOwnView && (
+          <>
+            <div className="card" style={{ padding: 20, marginTop: 30 }}>
+              <h3 style={{ marginBottom: 12 }}>Reviews</h3>
+              {user && orderId && (
+                <div style={{ display: "grid", gridTemplateColumns: "120px 1fr auto", gap: 10, alignItems: "center", marginBottom: 16 }}>
+                  <select className="input-field" value={reviewRating} onChange={(e) => setReviewRating(parseInt(e.target.value, 10))}>
+                    {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} Stars</option>)}
+                  </select>
+                  <input
+                    className="input-field"
+                    placeholder="Write a short review"
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                  />
+                  <button className="btn btn-primary" onClick={handleReviewSubmit}>Submit</button>
                 </div>
-              ))}
+              )}
+              {user && !orderId && (
+                <div style={{ fontSize: 12, color: "var(--gray-500)", marginBottom: 12 }}>
+                  You can review this item only after your order is delivered.
+                </div>
+              )}
+              {reviews.length === 0 ? (
+                <div style={{ color: "var(--gray-500)", fontSize: 13 }}>No reviews yet.</div>
+              ) : (
+                <div style={{ display: "grid", gap: 12 }}>
+                  {reviews.map((review) => (
+                    <div key={review.id} style={{ borderBottom: "1px solid var(--gray-100)", paddingBottom: 10 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{review.buyer_name || "Buyer"} * {review.rating} stars</div>
+                      <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 4 }}>{review.comment}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        <div className="card" style={{ padding: 20, marginTop: 20 }}>
-          <h3 style={{ marginBottom: 12 }}>Comments</h3>
-          {user && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginBottom: 16 }}>
-              <input
-                className="input-field"
-                placeholder="Write a comment about this product"
-                value={commentText}
-                onChange={(event) => setCommentText(event.target.value)}
-              />
-              <button className="btn btn-primary" onClick={handleCommentSubmit}>Post</button>
-            </div>
-          )}
-          {comments.length === 0 ? (
-            <div style={{ color: "var(--gray-500)", fontSize: 13 }}>No comments yet.</div>
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {comments.map((comment) => (
-                <div key={comment.id} style={{ borderBottom: "1px solid var(--gray-100)", paddingBottom: 10 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{comment.username}</div>
-                  <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 4 }}>{comment.text}</div>
-                  <div style={{ fontSize: 11, color: "var(--gray-400)", marginTop: 6 }}>
-                    {new Date(comment.created_at).toLocaleString("en-PH")}
-                  </div>
+            <div className="card" style={{ padding: 20, marginTop: 20 }}>
+              <h3 style={{ marginBottom: 12 }}>Comments</h3>
+              {user && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginBottom: 16 }}>
+                  <input
+                    className="input-field"
+                    placeholder="Write a comment about this product"
+                    value={commentText}
+                    onChange={(event) => setCommentText(event.target.value)}
+                  />
+                  <button className="btn btn-primary" onClick={handleCommentSubmit}>Post</button>
                 </div>
-              ))}
+              )}
+              {comments.length === 0 ? (
+                <div style={{ color: "var(--gray-500)", fontSize: 13 }}>No comments yet.</div>
+              ) : (
+                <div style={{ display: "grid", gap: 12 }}>
+                  {comments.map((comment) => (
+                    <div key={comment.id} style={{ borderBottom: "1px solid var(--gray-100)", paddingBottom: 10 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{comment.username}</div>
+                      <div style={{ fontSize: 13, color: "var(--gray-600)", marginTop: 4 }}>{comment.text}</div>
+                      <div style={{ fontSize: 11, color: "var(--gray-400)", marginTop: 6 }}>
+                        {new Date(comment.created_at).toLocaleString("en-PH")}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -343,6 +385,4 @@ const styles = {
   qtyBtn: { width: 36, height: 36, background: "var(--gray-50)", border: "none", cursor: "pointer", fontSize: 18, fontWeight: 600 },
   qtyNum: { width: 40, textAlign: "center", fontSize: 15, fontWeight: 600 },
   actions: { display: "flex", gap: 12, marginBottom: 20 },
-  chatBox: { background: "var(--gray-50)", borderRadius: "var(--radius)", padding: 16, border: "1px solid var(--gray-200)" },
 };
-
