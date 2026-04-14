@@ -3,8 +3,26 @@ from flask_jwt_extended import create_access_token, set_access_cookies, unset_jw
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import db, User
 from services.auth import login_required, get_current_user_id
+from sqlalchemy import or_
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+import os
 
 auth_bp = Blueprint("auth", __name__)
+
+
+def _normalize_phone(value):
+    return "".join(ch for ch in str(value or "") if ch.isdigit() or ch == "+").strip()
+
+
+def _issue_auth_response(user, status_code=200):
+    token = create_access_token(identity=str(user.id))
+    session["user_id"] = user.id
+    session["role"] = user.role
+    session.permanent = True
+    response = jsonify({"token": token, "user": user.to_dict()})
+    set_access_cookies(response, token)
+    return response, status_code
 
 
 @auth_bp.route("/register", methods=["POST"])
@@ -13,43 +31,81 @@ def register():
     if not data or not data.get("name") or not data.get("email") or not data.get("password"):
         return jsonify({"error": "Name, email, and password are required"}), 400
 
-    if User.query.filter_by(email=data["email"]).first():
+    email = str(data["email"]).strip().lower()
+    phone = _normalize_phone(data.get("phone", ""))
+    if User.query.filter_by(email=email).first():
         return jsonify({"error": "Email already registered"}), 409
+    if phone and User.query.filter_by(phone=phone).first():
+        return jsonify({"error": "Mobile number already registered"}), 409
 
     user = User(
         name=data["name"],
-        email=data["email"],
+        email=email,
         password_hash=generate_password_hash(data["password"]),
-        role=data.get("role", "user"),
-        phone=data.get("phone", ""),
+        role="user",
+        phone=phone,
         address=data.get("address", ""),
     )
     db.session.add(user)
     db.session.commit()
-
-    token = create_access_token(identity=str(user.id))
-    session["user_id"] = user.id
-    session["role"] = user.role
-    session.permanent = True
-    response = jsonify({"token": token, "user": user.to_dict()})
-    set_access_cookies(response, token)
-    return response, 201
+    return _issue_auth_response(user, status_code=201)
 
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
-    user = User.query.filter_by(email=data.get("email")).first()
-    if not user or not check_password_hash(user.password_hash, data.get("password", "")):
-        return jsonify({"error": "Invalid email or password"}), 401
+    data = request.get_json() or {}
+    identifier = str(data.get("identifier") or data.get("email") or "").strip()
+    password = str(data.get("password") or "")
+    if not identifier or not password:
+        return jsonify({"error": "Identifier and password are required"}), 400
 
-    token = create_access_token(identity=str(user.id))
-    session["user_id"] = user.id
-    session["role"] = user.role
-    session.permanent = True
-    response = jsonify({"token": token, "user": user.to_dict()})
-    set_access_cookies(response, token)
-    return response, 200
+    normalized_phone = _normalize_phone(identifier)
+    user = User.query.filter(
+        or_(User.email == identifier.lower(), User.phone == normalized_phone)
+    ).first()
+    if not user or not check_password_hash(user.password_hash, password):
+        return jsonify({"error": "Invalid email/mobile or password"}), 401
+
+    return _issue_auth_response(user)
+
+
+@auth_bp.route("/google", methods=["POST"])
+def login_with_google():
+    data = request.get_json() or {}
+    credential = data.get("credential")
+    if not credential:
+        return jsonify({"error": "Google credential is required"}), 400
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    if not client_id:
+        return jsonify({"error": "Google sign-in is not configured on server"}), 500
+
+    try:
+        payload = id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            client_id,
+        )
+    except Exception:
+        return jsonify({"error": "Invalid Google credential"}), 401
+
+    email = str(payload.get("email") or "").strip().lower()
+    if not email:
+        return jsonify({"error": "Google account email not available"}), 400
+
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        fallback_name = str(payload.get("name") or email.split("@")[0]).strip() or "Google User"
+        user = User(
+            name=fallback_name,
+            email=email,
+            password_hash=generate_password_hash(os.urandom(24).hex()),
+            role="user",
+        )
+        db.session.add(user)
+        db.session.commit()
+
+    return _issue_auth_response(user)
 
 
 @auth_bp.route("/me", methods=["GET"])

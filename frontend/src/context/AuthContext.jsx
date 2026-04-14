@@ -29,8 +29,8 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const login = async (email, password) => {
-    const data = await authAPI.login({ email, password });
+  const login = async (identifier, password) => {
+    const data = await authAPI.login({ identifier, password });
     if (data.token) localStorage.setItem("token", data.token);
     localStorage.setItem("auth_sync", String(Date.now()));
     setUser(data.user);
@@ -39,6 +39,14 @@ export function AuthProvider({ children }) {
 
   const register = async (fields) => {
     const data = await authAPI.register(fields);
+    if (data.token) localStorage.setItem("token", data.token);
+    localStorage.setItem("auth_sync", String(Date.now()));
+    setUser(data.user);
+    return data.user;
+  };
+
+  const loginWithGoogle = async (credential) => {
+    const data = await authAPI.google({ credential });
     if (data.token) localStorage.setItem("token", data.token);
     localStorage.setItem("auth_sync", String(Date.now()));
     setUser(data.user);
@@ -71,7 +79,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser, validateSession }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, logout, refreshUser, validateSession }}>
       {children}
     </AuthContext.Provider>
   );

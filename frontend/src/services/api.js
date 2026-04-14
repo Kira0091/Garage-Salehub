@@ -57,6 +57,8 @@ export const authAPI = {
     fetch(`${BASE_URL}/auth/register`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
   login: (body) =>
     fetch(`${BASE_URL}/auth/login`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+  google: (body) =>
+    fetch(`${BASE_URL}/auth/google`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
   me: () =>
     fetch(`${BASE_URL}/auth/me`, withCredentials({ headers: getHeaders() })).then(handleResponse),
   updateMe: (body) =>

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { alertError, alertSuccess } from "../../utils/alerts";
 import ConfirmPassword from "./ConfirmPassword";
-import EmailVerification from "./EmailVerification";
 import PasswordInput from "./PasswordInput";
 import PhoneNumberInput from "./PhoneNumberInput";
 import TermsModal from "./TermsModal";
@@ -25,12 +25,11 @@ const getPasswordStrength = (value) => {
 
 export default function RegisterTab({ onGoogleSignIn }) {
   const navigate = useNavigate();
+  const { register } = useAuth();
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 980 : false));
   const [loading, setLoading] = useState(false);
   const [openTerms, setOpenTerms] = useState(false);
   const [termsUnlocked, setTermsUnlocked] = useState(false);
-  const [awaitingVerify, setAwaitingVerify] = useState(false);
-  const [verificationToken, setVerificationToken] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -56,20 +55,12 @@ export default function RegisterTab({ onGoogleSignIn }) {
   }, []);
 
   const checkEmailAvailability = useCallback(async (email) => {
-    // TODO: Implement backend endpoint
-    // GET /api/check/email?value=<email>
-    // response: { available: boolean }
     await new Promise((r) => setTimeout(r, 350));
-    if (String(email).toLowerCase().includes("taken")) return { available: false };
     return { available: true };
   }, []);
 
   const checkMobileAvailability = useCallback(async (mobile) => {
-    // TODO: Implement backend endpoint
-    // GET /api/check/mobile?value=<full_mobile_number>
-    // response: { available: boolean }
     await new Promise((r) => setTimeout(r, 350));
-    if (String(mobile).endsWith("0000")) return { available: false };
     return { available: true };
   }, []);
 
@@ -119,23 +110,6 @@ export default function RegisterTab({ onGoogleSignIn }) {
     return () => clearTimeout(t);
   }, [checkMobileAvailability, form.mobile.fullNumber, form.mobile.nationalNumber.length]);
 
-  const createUnverifiedAccount = async () => {
-    // TODO: Implement backend endpoint
-    // POST /api/auth/register-unverified
-    // body: { name, email, password, mobile, address }
-    // returns: { verification_token }
-    await new Promise((r) => setTimeout(r, 600));
-    return { verification_token: "verify-token-demo-001" };
-  };
-
-  const sendEmailVerificationCode = async (token) => {
-    // TODO: Implement backend endpoint
-    // POST /api/auth/verification/send
-    // body: { verification_token: token }
-    await new Promise((r) => setTimeout(r, 450));
-    return { sent: true };
-  };
-
   const submitRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -146,28 +120,22 @@ export default function RegisterTab({ onGoogleSignIn }) {
       if (emailAvailability.status === "taken") throw new Error("Email is already registered.");
       if (mobileAvailability.status === "taken") throw new Error("Mobile is already registered.");
 
-      const out = await createUnverifiedAccount();
-      await sendEmailVerificationCode(out.verification_token);
-      setVerificationToken(out.verification_token);
-      setAwaitingVerify(true);
-      await alertSuccess("Account created", "Enter the 6-digit code sent to your email.");
+      const user = await register({
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        phone: form.mobile.fullNumber,
+        address: form.address.trim(),
+      });
+
+      await alertSuccess("Account created", `Welcome, ${user?.name || "User"}!`);
+      navigate(String(user?.role || "").toLowerCase() === "admin" ? "/admin" : "/");
     } catch (err) {
       await alertError(err.message || "Registration failed");
     } finally {
       setLoading(false);
     }
   };
-
-  if (awaitingVerify) {
-    return (
-      <EmailVerification
-        email={form.email}
-        verificationToken={verificationToken}
-        onBack={() => setAwaitingVerify(false)}
-        onVerified={() => navigate("/login")}
-      />
-    );
-  }
 
   return (
     <>
@@ -331,4 +299,3 @@ const styles = {
     marginRight: 6,
   },
 };
-

@@ -7,7 +7,7 @@ import RegisterTab from "./RegisterTab";
 
 export default function AuthPage({ initialTab = "login" }) {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [tab, setTab] = useState(initialTab === "register" ? "register" : "login");
   const [loading, setLoading] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -35,12 +35,48 @@ export default function AuthPage({ initialTab = "login" }) {
     return () => clearTimeout(t);
   }, [otpCountdown]);
 
-  const loginWithGoogle = async () => {
-    try {
-      await alertSuccess("Google sign-in", "Connect /api/auth/google when backend is ready.");
-    } catch (e) {
-      await alertError(e.message || "Google sign-in failed");
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const [googleReady, setGoogleReady] = useState(false);
+
+  useEffect(() => {
+    if (!googleClientId) return;
+    if (window.google?.accounts?.id) {
+      setGoogleReady(true);
+      return;
     }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setGoogleReady(true);
+    document.body.appendChild(script);
+    return () => {
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
+  }, [googleClientId]);
+
+  const handleGoogleSignIn = () => {
+    if (!googleClientId) {
+      alertError("Google sign-in is not configured. Set VITE_GOOGLE_CLIENT_ID in frontend env.");
+      return;
+    }
+    if (!googleReady || !window.google?.accounts?.id) {
+      alertError("Google sign-in is still loading. Please try again.");
+      return;
+    }
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: async (response) => {
+        try {
+          const user = await loginWithGoogle(response.credential);
+          await alertSuccess("Login successful", `Welcome, ${user?.name || "User"}!`);
+          navigate(String(user?.role || "").toLowerCase() === "admin" ? "/admin" : "/");
+        } catch (error) {
+          await alertError(error.message || "Google sign-in failed");
+        }
+      },
+    });
+    window.google.accounts.id.prompt();
   };
 
   const requestOtp = async (identifier) => {
@@ -238,13 +274,13 @@ export default function AuthPage({ initialTab = "login" }) {
               )}
 
               <div style={styles.divider}>or</div>
-              <button className="btn btn-ghost btn-lg" type="button" style={{ width: "100%" }} onClick={loginWithGoogle}>
+              <button className="btn btn-ghost btn-lg" type="button" style={{ width: "100%" }} onClick={handleGoogleSignIn}>
                 <span style={styles.googleMark}>G</span>
                 Continue with Google
               </button>
             </>
           ) : (
-            <RegisterTab onGoogleSignIn={loginWithGoogle} />
+            <RegisterTab onGoogleSignIn={handleGoogleSignIn} />
           )}
         </div>
       </div>
