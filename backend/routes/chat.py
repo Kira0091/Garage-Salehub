@@ -12,6 +12,15 @@ ALLOWED = {"png", "jpg", "jpeg", "webp", "gif", "mp4", "mov", "avi", "webm"}
 def allowed(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED
 
+
+def _opt_float(value):
+    try:
+        if value in [None, ""]:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
 def get_admin():
     return User.query.filter_by(role="admin").first()
 
@@ -77,8 +86,13 @@ def send_message():
             images=",".join(attachments),
             seller_id=user_id,
             location=item_data.get("location", ""),
-            status="pending",
-            verification_status="pending_verification",
+            latitude=_opt_float(item_data.get("latitude")),
+            longitude=_opt_float(item_data.get("longitude")),
+            address=item_data.get("address", ""),
+            city=item_data.get("city", ""),
+            country=item_data.get("country", ""),
+            status="inventory",
+            verification_status="approved",
         )
         db.session.add(product)
         db.session.flush()

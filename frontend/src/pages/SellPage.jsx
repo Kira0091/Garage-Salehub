@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { productsAPI } from "../services/api";
+import { chatAPI, productsAPI } from "../services/api";
 import { alertError, alertSuccess, confirmAction } from "../utils/alerts";
-import VerificationMediaUploader from "../components/VerificationMediaUploader";
 
 export default function SellPage() {
   const navigate = useNavigate();
@@ -25,9 +24,6 @@ export default function SellPage() {
     country: "",
   });
   const [files, setFiles] = useState([]);
-  const [verificationPhotos, setVerificationPhotos] = useState([]);
-  const [verificationVideo, setVerificationVideo] = useState(null);
-  const [verificationProgress, setVerificationProgress] = useState(null);
 
   useEffect(() => {
     productsAPI.categories().then(setCategories).catch(() => setCategories([]));
@@ -52,14 +48,10 @@ export default function SellPage() {
       await alertError("Please complete title, price, category, and at least one image.", "Missing required fields");
       return;
     }
-    if (verificationPhotos.length < 3 || !verificationVideo) {
-      await alertError("Verification media requires at least 3 photos and 1 video.", "Verification media required");
-      return;
-    }
 
     const confirmed = await confirmAction({
-      title: "Submit this item for review?",
-      text: "Your item will be sent to admin for approval.",
+      title: "Submit this item to admin chat?",
+      text: "Your item details will be sent to Messages so you can negotiate first.",
       confirmText: "Submit item",
       confirmButtonColor: "#e11d48",
     });
@@ -68,44 +60,35 @@ export default function SellPage() {
     }
 
     setSending(true);
-    setVerificationProgress(null);
     try {
       const fd = new FormData();
-      fd.append("title", form.title.trim());
-      fd.append("description", form.description.trim());
-      fd.append("condition", form.condition);
-      fd.append("price", form.price);
-      fd.append("quantity", form.quantity || "1");
-      fd.append("category_id", form.category_id);
-      if (form.location) fd.append("location", form.location);
-      if (form.latitude) fd.append("latitude", form.latitude);
-      if (form.longitude) fd.append("longitude", form.longitude);
-      if (form.address) fd.append("address", form.address);
-      if (form.city) fd.append("city", form.city);
-      if (form.country) fd.append("country", form.country);
-      files.forEach((f) => fd.append("images", f));
-
-      const created = await productsAPI.create(fd);
-
-      const verificationFd = new FormData();
-      verificationPhotos.forEach((file) => verificationFd.append("verification_photos", file));
-      verificationFd.append("verification_video", verificationVideo);
-
-      try {
-        await productsAPI.uploadVerificationMedia(created.id, verificationFd, setVerificationProgress);
-      } catch (uploadErr) {
-        await productsAPI.delete(created.id);
-        throw uploadErr;
-      }
+      const itemData = {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        condition: form.condition,
+        price: parseFloat(form.price || 0),
+        quantity: parseInt(form.quantity || "1", 10),
+        category_id: form.category_id || null,
+        location: form.location || "",
+        latitude: form.latitude || "",
+        longitude: form.longitude || "",
+        address: form.address || "",
+        city: form.city || "",
+        country: form.country || "",
+      };
+      fd.append("message_type", "item_submission");
+      fd.append("item_data", JSON.stringify(itemData));
+      fd.append("content", `New item submitted for negotiation: ${itemData.title} (asking PHP ${itemData.price.toLocaleString("en-PH")})`);
+      files.forEach((f) => fd.append("files", f));
+      await chatAPI.sendWithFiles(fd);
 
       localStorage.setItem("my_products_refresh", String(Date.now()));
-      await alertSuccess("Item submitted", "Your listing and verification media were sent for admin review.");
-      navigate("/my-products");
+      await alertSuccess("Item sent to Messages", "Your submission was sent to admin chat. Continue negotiation there.");
+      navigate("/chat");
     } catch (err) {
       await alertError(err.message || "Submission failed");
     } finally {
       setSending(false);
-      setVerificationProgress(null);
     }
   };
 
@@ -114,7 +97,7 @@ export default function SellPage() {
       <div className="container" style={{ maxWidth: 900 }}>
         <div className="page-header">
           <h1 className="page-title">Submit an Item</h1>
-          <p className="page-subtitle">This is separate from Messages. Submit here, then track status in My Submissions.</p>
+          <p className="page-subtitle">Submit here using the standard form. Details will be sent to Messages for admin negotiation.</p>
         </div>
 
         <form className="card" style={{ padding: 20 }} onSubmit={submit}>
@@ -233,13 +216,6 @@ export default function SellPage() {
               <input className="input-field" type="file" accept="image/*" multiple onChange={onFiles} />
             </div>
 
-            <VerificationMediaUploader
-              photos={verificationPhotos}
-              setPhotos={setVerificationPhotos}
-              videoFile={verificationVideo}
-              setVideoFile={setVerificationVideo}
-              uploadProgress={verificationProgress}
-            />
           </div>
 
           {previews.length > 0 && (
@@ -255,7 +231,7 @@ export default function SellPage() {
               Open Messages
             </button>
             <button type="submit" className="btn btn-primary" disabled={sending}>
-              {sending ? "Submitting..." : "Submit Item"}
+              {sending ? "Submitting..." : "Submit to Messages"}
             </button>
           </div>
         </form>

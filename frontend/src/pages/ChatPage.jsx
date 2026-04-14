@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
-import { chatAPI, productsAPI } from "../services/api";
+import { adminAPI, chatAPI, productsAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { alertError, alertSuccess } from "../utils/alerts";
 import Icon from "../components/Icon";
@@ -70,6 +70,7 @@ export default function ChatPage() {
   const [itemForm, setItemForm] = useState({
     title: "", condition: "Good", price: "", quantity: "1",
     category_id: "", description: "", reason: "", accessories: "", location: "",
+    latitude: "", longitude: "", address: "", city: "", country: "",
   });
   const [itemFiles, setItemFiles] = useState([]);
   const [itemPreviews, setItemPreviews] = useState([]);
@@ -328,18 +329,26 @@ export default function ChatPage() {
         quantity: parseInt(itemForm.quantity),
         category_id: itemForm.category_id || null,
         location: itemForm.location || "",
+        latitude: itemForm.latitude || "",
+        longitude: itemForm.longitude || "",
+        address: itemForm.address || "",
+        city: itemForm.city || "",
+        country: itemForm.country || "",
         description: `${itemForm.description}\n\nReason for Selling: ${itemForm.reason}\nIncluded Accessories: ${itemForm.accessories}`.trim(),
       });
       fd.append("message_type", "item_submission");
       fd.append("item_data", itemData);
-      fd.append("content", `New item submitted for review: ${itemForm.title} (asking PHP ${parseFloat(itemForm.price).toLocaleString("en-PH")})`);
+      fd.append("content", `New item submitted for negotiation: ${itemForm.title} (asking PHP ${parseFloat(itemForm.price).toLocaleString("en-PH")})`);
       if (user.role === "admin" && selectedPartner) fd.append("receiver_id", selectedPartner.id);
       itemFiles.forEach((f) => fd.append("files", f));
 
       const msg = await chatAPI.sendWithFiles(fd);
       setMessages((prev) => [...prev, msg]);
       setShowItemForm(false);
-      setItemForm({ title: "", condition: "Good", price: "", quantity: "1", category_id: "", description: "", reason: "", accessories: "" });
+      setItemForm({
+        title: "", condition: "Good", price: "", quantity: "1", category_id: "", description: "", reason: "", accessories: "",
+        location: "", latitude: "", longitude: "", address: "", city: "", country: "",
+      });
       setItemFiles([]);
       setItemPreviews([]);
       setItemValidationErrors({});
@@ -771,8 +780,18 @@ function AdminProductPicker({ sellerId, value, onChange }) {
   const [products, setProducts] = useState([]);
   useEffect(() => {
     if (!sellerId) return;
-    productsAPI.getAll({ status: "pending", per_page: 50 })
-      .then((d) => setProducts(d.products.filter((p) => p.seller?.id === sellerId)))
+    Promise.allSettled([
+      productsAPI.getAll({ status: "pending", per_page: 100 }),
+      adminAPI.inventoryProducts(),
+    ])
+      .then(([pendingRes, inventoryRes]) => {
+        const pendingItems = pendingRes.status === "fulfilled" ? (pendingRes.value.products || []) : [];
+        const inventoryItems = inventoryRes.status === "fulfilled" ? (inventoryRes.value || []) : [];
+        const merged = [...pendingItems, ...inventoryItems];
+        const filtered = merged.filter((p) => p.seller?.id === sellerId);
+        const deduped = Array.from(new Map(filtered.map((p) => [p.id, p])).values());
+        setProducts(deduped);
+      })
       .catch(() => {});
   }, [sellerId]);
   if (products.length === 0) return null;
@@ -826,6 +845,53 @@ function ItemSubmissionForm({ categories, form, setForm, previews, onFiles, file
             <label>Location</label>
             <input className="input-field" placeholder="e.g. Makati City" value={form.location} onChange={(e) => set("location", e.target.value)} />
           </div>
+          <div className="input-group">
+            <label>Latitude</label>
+            <input className="input-field" type="number" step="any" placeholder="14.5995" value={form.latitude || ""} onChange={(e) => set("latitude", e.target.value)} />
+          </div>
+          <div className="input-group">
+            <label>Longitude</label>
+            <input className="input-field" type="number" step="any" placeholder="120.9842" value={form.longitude || ""} onChange={(e) => set("longitude", e.target.value)} />
+          </div>
+          <div className="input-group">
+            <label>Address</label>
+            <input className="input-field" value={form.address || ""} onChange={(e) => set("address", e.target.value)} />
+          </div>
+          <div className="input-group">
+            <label>City</label>
+            <input className="input-field" value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
+          </div>
+          <div className="input-group">
+            <label>Country</label>
+            <input className="input-field" value={form.country || ""} onChange={(e) => set("country", e.target.value)} />
+          </div>
+          <div className="input-group" style={{ gridColumn: "1/-1" }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                if (!navigator.geolocation) return;
+                navigator.geolocation.getCurrentPosition((pos) => {
+                  set("latitude", String(pos.coords.latitude));
+                  set("longitude", String(pos.coords.longitude));
+                });
+              }}
+            >
+              Use my current location
+            </button>
+          </div>
+          {form.latitude && form.longitude && (
+            <div className="input-group" style={{ gridColumn: "1/-1" }}>
+              <label>Map Preview</label>
+              <iframe
+                title="Location preview"
+                width="100%"
+                height="180"
+                style={{ border: "1px solid var(--gray-200)", borderRadius: 8 }}
+                src={`https://maps.google.com/maps?q=${form.latitude},${form.longitude}&z=14&output=embed`}
+              />
+            </div>
+          )}
           <div className="input-group" style={{ gridColumn: "1/-1" }}>
             <label>Description *</label>
             <textarea className="input-field" style={errors.description ? S.fieldError : undefined} rows={2} placeholder="Describe the item's condition, brand, model..." value={form.description} onChange={(e) => set("description", e.target.value)} />
@@ -875,7 +941,7 @@ function ItemSubmissionForm({ categories, form, setForm, previews, onFiles, file
         <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
           <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
           <button className="btn btn-primary" style={{ flex: 1 }} onClick={onSubmit} disabled={sending}>
-            {sending ? "Submitting..." : "Submit Item for Review"}
+            {sending ? "Submitting..." : "Submit to Admin Chat"}
           </button>
         </div>
       </div>
@@ -952,7 +1018,3 @@ const S = {
   },
   uploadBox: { border: "2px dashed var(--gray-300)", borderRadius: 10, cursor: "pointer", minHeight: 80, transition: "border-color 0.15s" },
 };
-
-
-
-
