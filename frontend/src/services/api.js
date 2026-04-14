@@ -119,6 +119,8 @@ export const ordersAPI = {
     fetch(`${BASE_URL}/orders/${id}/pay`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
   updateStatus: (id, body) =>
     fetch(`${BASE_URL}/orders/${id}/status`, withCredentials({ method: "PUT", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+  markReceived: (id) =>
+    fetch(`${BASE_URL}/orders/${id}/receive`, withCredentials({ method: "POST", headers: getHeaders() })).then(handleResponse),
   cancel: (id) =>
     fetch(`${BASE_URL}/orders/${id}/cancel`, withCredentials({ method: "POST", headers: getHeaders() })).then(handleResponse),
 };
@@ -196,6 +198,8 @@ export const vouchersAPI = {
     fetch(`${BASE_URL}/vouchers/`, withCredentials({ headers: getHeaders() })).then(handleResponse),
   deactivate: (id) =>
     fetch(`${BASE_URL}/vouchers/${id}`, withCredentials({ method: "DELETE", headers: getHeaders() })).then(handleResponse),
+  activate: (id) =>
+    fetch(`${BASE_URL}/vouchers/${id}/activate`, withCredentials({ method: "PUT", headers: getHeaders() })).then(handleResponse),
   validate: (body) =>
     fetch(`${BASE_URL}/vouchers/validate`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
 };

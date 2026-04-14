@@ -16,6 +16,27 @@ def generate_tracking():
     return "GSH-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
 
 
+def _apply_delivered_rewards(order):
+    earned = int((order.total_amount or 0) // 10)
+    already_awarded = LoyaltyLog.query.filter_by(
+        user_id=order.buyer_id,
+        reason="purchase",
+        order_id=order.id,
+    ).first()
+    if earned > 0 and not already_awarded:
+        add_loyalty_points(
+            order.buyer_id,
+            earned,
+            reason="purchase",
+            order_id=order.id,
+            notify_title="Points Earned",
+            notify_body=f"You earned {earned} points from your delivered order.",
+        )
+        order.points_earned = earned
+    apply_first_purchase_bonus_if_needed(order.buyer_id, order.id)
+    check_retention_triggers(order.buyer_id)
+
+
 @orders_bp.route("/", methods=["POST"])
 @login_required
 def create_order():
@@ -193,8 +214,10 @@ def update_order_status(order_id):
     order = Order.query.get_or_404(order_id)
     data = request.get_json() or {}
     new_status = data.get("status")
-    valid_statuses = ["pending", "processing", "shipped", "delivered", "cancelled"]
+    valid_statuses = ["pending", "processing", "shipped", "cancelled"]
     if new_status not in valid_statuses:
+        if new_status == "delivered":
+            return jsonify({"error": "Only buyer can mark order as received"}), 400
         return jsonify({"error": "Invalid status"}), 400
 
     order.status = new_status
@@ -205,25 +228,7 @@ def update_order_status(order_id):
         message_body = "Your order is on its way!"
     elif new_status == "delivered":
         message_body = "Your order has been delivered. Leave a review!"
-        # +1 point per PHP10 spent (floor)
-        earned = int((order.total_amount or 0) // 10)
-        already_awarded = LoyaltyLog.query.filter_by(
-            user_id=order.buyer_id,
-            reason="purchase",
-            order_id=order.id,
-        ).first()
-        if earned > 0 and not already_awarded:
-            add_loyalty_points(
-                order.buyer_id,
-                earned,
-                reason="purchase",
-                order_id=order.id,
-                notify_title="Points Earned",
-                notify_body=f"You earned {earned} points from your delivered order.",
-            )
-            order.points_earned = earned
-        apply_first_purchase_bonus_if_needed(order.buyer_id, order.id)
-        check_retention_triggers(order.buyer_id)
+        _apply_delivered_rewards(order)
     elif new_status == "cancelled":
         message_body = "Your order has been cancelled."
         for item in order.items:
@@ -239,6 +244,41 @@ def update_order_status(order_id):
         message_body,
         "/orders",
     )
+    db.session.commit()
+    return jsonify(order.to_dict()), 200
+
+
+@orders_bp.route("/<int:order_id>/receive", methods=["POST"])
+@login_required
+def mark_order_received(order_id):
+    user_id = get_current_user_id()
+    order = Order.query.get_or_404(order_id)
+    if order.buyer_id != user_id:
+        return jsonify({"error": "Unauthorized"}), 403
+    if order.status != "shipped":
+        return jsonify({"error": "Only shipped orders can be marked as received"}), 400
+
+    order.status = "delivered"
+    _apply_delivered_rewards(order)
+
+    create_notification(
+        user_id,
+        "order_status",
+        "Order Received",
+        f"You confirmed delivery for order #{order.id}.",
+        f"/orders/{order.id}",
+    )
+
+    seller_ids = {item.product.seller_id for item in order.items if item.product}
+    for seller_id in seller_ids:
+        create_notification(
+            seller_id,
+            "order_status",
+            "Order Delivered",
+            f"Order #{order.id} was marked as received by buyer.",
+            "/orders",
+        )
+
     db.session.commit()
     return jsonify(order.to_dict()), 200
 

@@ -85,6 +85,14 @@ export default function Navbar() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/");
+  };
+
   return (
     <header style={styles.header}>
       <div style={styles.mainNav}>
@@ -107,6 +115,11 @@ export default function Navbar() {
           )}
 
           <div style={styles.actions}>
+            {isAuthRoute && (
+              <button type="button" style={styles.navBackBtn} onClick={handleBack}>
+                ← Back
+              </button>
+            )}
             {!user ? (
               <>
                 {!isAuthRoute && <Link to="/login" className="btn btn-ghost btn-sm">Login</Link>}
@@ -126,7 +139,6 @@ export default function Navbar() {
                         <Link className="navbar-dropdown-item" to="/profile" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Profile</Link>
                         <Link className="navbar-dropdown-item" to="/my-products" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Submissions</Link>
                         <Link className="navbar-dropdown-item" to="/seller-dashboard" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Seller Dashboard</Link>
-                        <Link className="navbar-dropdown-item" to="/dashboard" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Dashboard</Link>
                         <Link className="navbar-dropdown-item" to="/report-problem" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Report a Problem</Link>
                         <Link className="navbar-dropdown-item" to="/orders" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Orders</Link>
                         <Link className="navbar-dropdown-item" to="/loyalty" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Points ({points})</Link>
@@ -211,4 +223,14 @@ const styles = {
   navLinks: { background: "var(--black)", padding: "0" },
   navLinksInner: { display: "flex", alignItems: "center", gap: 4 },
   navLink: { color: "rgba(255,255,255,0.85)", padding: "11px 16px", fontSize: 14, fontWeight: 500, display: "block", transition: "color 0.15s", textDecoration: "none" },
+  navBackBtn: {
+    fontSize: 14,
+    padding: "6px 10px",
+    border: "1px solid var(--red)",
+    borderRadius: "var(--radius)",
+    background: "var(--red)",
+    color: "white",
+    cursor: "pointer",
+    lineHeight: 1.2,
+  },
 };

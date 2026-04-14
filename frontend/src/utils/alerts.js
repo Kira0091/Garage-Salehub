@@ -5,28 +5,41 @@ const baseOptions = {
   background: "#ffffff",
 };
 
+const toastOptions = {
+  toast: true,
+  position: "top-end",
+  showConfirmButton: false,
+  timerProgressBar: true,
+};
+
 export const alertSuccess = (title, text = "") =>
   Swal.fire({
     ...baseOptions,
+    ...toastOptions,
     icon: "success",
     title,
     text,
+    timer: 2200,
   });
 
 export const alertError = (text, title = "Action failed") =>
   Swal.fire({
     ...baseOptions,
+    ...toastOptions,
     icon: "error",
     title,
     text,
+    timer: 3000,
   });
 
 export const alertInfo = (title, text = "") =>
   Swal.fire({
     ...baseOptions,
+    ...toastOptions,
     icon: "info",
     title,
     text,
+    timer: 2400,
   });
 
 export const confirmAction = async ({

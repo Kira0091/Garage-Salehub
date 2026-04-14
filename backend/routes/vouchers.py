@@ -113,6 +113,18 @@ def deactivate_voucher(voucher_id):
     return jsonify(voucher.to_dict()), 200
 
 
+@vouchers_bp.route("/<int:voucher_id>/activate", methods=["PUT"])
+@login_required
+def activate_voucher(voucher_id):
+    _, err = _require_admin()
+    if err:
+        return err
+    voucher = Voucher.query.get_or_404(voucher_id)
+    voucher.is_active = True
+    db.session.commit()
+    return jsonify(voucher.to_dict()), 200
+
+
 @vouchers_bp.route("/validate", methods=["POST"])
 @login_required
 def validate_voucher():

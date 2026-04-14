@@ -8,6 +8,21 @@ import Icon from "../components/Icon";
 
 const TABS = ["Dashboard", "Pending Verifications", "All Products", "Vouchers", "Orders", "Users", "Messages", "Reports"];
 
+const ADMIN_ORDER_STATUS_OPTIONS = [
+  { value: "pending", label: "To Pay" },
+  { value: "processing", label: "To Shipped" },
+  { value: "shipped", label: "To Received" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const ADMIN_STATUS_LABEL = {
+  pending: "to pay",
+  processing: "to shipped",
+  shipped: "to received",
+  delivered: "completed (buyer confirmed)",
+  cancelled: "cancelled",
+};
+
 export default function AdminPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -76,6 +91,14 @@ export default function AdminPage() {
     if (tab === "Reports") {
       reportsAPI.mine().then(setReports).catch(() => setReports([]));
     }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "Orders") return undefined;
+    const timer = setInterval(() => {
+      adminAPI.getAllOrders().then(setAllOrders).catch(() => {});
+    }, 5000);
+    return () => clearInterval(timer);
   }, [tab]);
 
   const handleApprove = async (product) => {
@@ -203,6 +226,16 @@ export default function AdminPage() {
       setVoucherMessage("Voucher deactivated.");
     } catch (e) {
       setVoucherMessage(e.message || "Failed to deactivate voucher.");
+    }
+  };
+
+  const activateVoucher = async (id) => {
+    try {
+      const updated = await vouchersAPI.activate(id);
+      setVouchers((prev) => prev.map((voucher) => (voucher.id === id ? updated : voucher)));
+      setVoucherMessage("Voucher activated.");
+    } catch (e) {
+      setVoucherMessage(e.message || "Failed to activate voucher.");
     }
   };
 
@@ -419,19 +452,23 @@ export default function AdminPage() {
                       <td>{o.buyer.name}</td>
                       <td style={{ fontWeight: 700 }}>PHP {o.total_amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
                       <td><span className={`badge ${o.payment_status === "paid" ? "badge-green" : "badge-yellow"}`}>{o.payment_status}</span></td>
-                      <td><span className="badge badge-blue">{o.status}</span></td>
+                      <td><span className={`badge ${o.status === "delivered" ? "badge-green" : "badge-blue"}`}>{ADMIN_STATUS_LABEL[o.status] || o.status}</span></td>
                       <td style={{ fontSize: 12 }}>{new Date(o.created_at).toLocaleDateString("en-PH")}</td>
                       <td>
-                        <select
-                          className="input-field"
-                          style={{ padding: "4px 8px", fontSize: 12 }}
-                          value={o.status}
-                          onChange={(e) => handleOrderStatus(o.id, e.target.value)}
-                        >
-                          {["pending", "processing", "shipped", "delivered", "cancelled"].map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
+                        {o.status === "delivered" ? (
+                          <span className="badge badge-green">Completed by buyer</span>
+                        ) : (
+                          <select
+                            className="input-field"
+                            style={{ padding: "4px 8px", fontSize: 12 }}
+                            value={o.status}
+                            onChange={(e) => handleOrderStatus(o.id, e.target.value)}
+                          >
+                            {ADMIN_ORDER_STATUS_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -566,9 +603,15 @@ export default function AdminPage() {
                           <td>{voucher.expires_at ? new Date(voucher.expires_at).toLocaleDateString("en-PH") : "-"}</td>
                           <td><span className={`badge ${voucher.status === "active" ? "badge-green" : voucher.status === "expired" ? "badge-yellow" : "badge-red"}`}>{voucher.status}</span></td>
                           <td>
-                            <button className="btn btn-sm" style={{ background: "#fee2e2", color: "var(--red)", border: "none" }} onClick={() => deactivateVoucher(voucher.id)}>
-                              Deactivate
-                            </button>
+                            {voucher.is_active ? (
+                              <button className="btn btn-sm" style={{ background: "#fee2e2", color: "var(--red)", border: "none" }} onClick={() => deactivateVoucher(voucher.id)}>
+                                Deactivate
+                              </button>
+                            ) : (
+                              <button className="btn btn-sm" style={{ background: "#dcfce7", color: "#166534", border: "none" }} onClick={() => activateVoucher(voucher.id)}>
+                                Activate
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}

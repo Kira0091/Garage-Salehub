@@ -272,6 +272,7 @@ const styles = {
   card: {
     width: "100%",
     maxWidth: 980,
+    margin: "0 auto",
     background: "white",
     borderRadius: "var(--radius-lg)",
     boxShadow: "var(--shadow-lg)",
