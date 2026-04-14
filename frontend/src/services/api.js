@@ -61,12 +61,19 @@ export const authAPI = {
     fetch(`${BASE_URL}/auth/google`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
   me: () =>
     fetch(`${BASE_URL}/auth/me`, withCredentials({ headers: getHeaders() })).then(handleResponse),
-  updateMe: (body) =>
-    fetch(`${BASE_URL}/auth/me`, withCredentials({ method: "PUT", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+  updateMe: (body) => {
+    const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+    return fetch(`${BASE_URL}/auth/me`, withCredentials({
+      method: "PUT",
+      headers: isFormData ? getHeaders(false) : getHeaders(),
+      body: isFormData ? body : JSON.stringify(body),
+    })).then(handleResponse);
+  },
   logout: () =>
     fetch(`${BASE_URL}/auth/logout`, withCredentials({ method: "POST", headers: getHeaders() })).then(handleResponse),
   validate: () =>
     fetch(`${BASE_URL}/auth/validate`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  avatarUrl: (filename) => `${BASE_URL}/auth/avatar/${filename}`,
 };
 
 // Products
@@ -249,6 +256,12 @@ export const adminAPI = {
     fetch(`${BASE_URL}/admin/products/${id}/reject`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
   getUsers: () =>
     fetch(`${BASE_URL}/admin/users`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  deactivateUser: (id) =>
+    fetch(`${BASE_URL}/admin/users/${id}/deactivate`, withCredentials({ method: "PUT", headers: getHeaders() })).then(handleResponse),
+  activateUser: (id) =>
+    fetch(`${BASE_URL}/admin/users/${id}/activate`, withCredentials({ method: "PUT", headers: getHeaders() })).then(handleResponse),
+  deleteUser: (id) =>
+    fetch(`${BASE_URL}/admin/users/${id}`, withCredentials({ method: "DELETE", headers: getHeaders() })).then(handleResponse),
   getAllOrders: () =>
     fetch(`${BASE_URL}/orders/`, withCredentials({ headers: getHeaders() })).then(handleResponse),
 };

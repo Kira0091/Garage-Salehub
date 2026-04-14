@@ -48,6 +48,11 @@ export default function CheckoutPage() {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!user?.address) return;
+    setAddress((prev) => (prev && prev.trim() ? prev : user.address));
+  }, [user?.address]);
+
   const applyVoucher = async () => {
     const code = voucherCode.trim().toUpperCase();
     if (!code) {
@@ -163,6 +168,15 @@ export default function CheckoutPage() {
                     placeholder="House #, Street, Barangay, City, Province"
                   />
                 </div>
+                {user?.address && (
+                  <button
+                    className="btn btn-outline"
+                    style={{ width: "100%", marginBottom: 10 }}
+                    onClick={() => setAddress(user.address)}
+                  >
+                    Use My Profile Address
+                  </button>
+                )}
                 <button className="btn btn-primary btn-lg" style={{ width: "100%" }} onClick={async () => { if (!address.trim()) return alertError("Address required", "Missing delivery address"); setStep(2); }}>
                   Continue to Payment
                 </button>

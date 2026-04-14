@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from utils.notifications import create_notification
 from utils.loyalty import add_loyalty_points
 from utils.retention import check_seller_milestone
+from datetime import datetime
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -302,3 +303,63 @@ def get_users():
         return err, status
     users = User.query.all()
     return jsonify([u.to_dict() for u in users]), 200
+
+
+@admin_bp.route("/users/<int:user_id>/deactivate", methods=["PUT"])
+@login_required
+def deactivate_user(user_id):
+    admin_user, err, status = require_admin()
+    if err:
+        return err, status
+
+    user = User.query.get_or_404(user_id)
+    if user.id == admin_user.id:
+        return jsonify({"error": "You cannot deactivate your own account"}), 400
+    if str(user.role).strip().lower() == "admin":
+        return jsonify({"error": "Admin accounts cannot be deactivated here"}), 400
+
+    user.is_active = False
+    db.session.commit()
+    return jsonify(user.to_dict()), 200
+
+
+@admin_bp.route("/users/<int:user_id>/activate", methods=["PUT"])
+@login_required
+def activate_user(user_id):
+    admin_user, err, status = require_admin()
+    if err:
+        return err, status
+
+    user = User.query.get_or_404(user_id)
+    if user.id == admin_user.id:
+        return jsonify({"error": "You cannot change your own account status here"}), 400
+    if str(user.role).strip().lower() == "admin":
+        return jsonify({"error": "Admin accounts cannot be changed here"}), 400
+
+    user.is_active = True
+    db.session.commit()
+    return jsonify(user.to_dict()), 200
+
+
+@admin_bp.route("/users/<int:user_id>", methods=["DELETE"])
+@login_required
+def delete_user(user_id):
+    admin_user, err, status = require_admin()
+    if err:
+        return err, status
+
+    user = User.query.get_or_404(user_id)
+    if user.id == admin_user.id:
+        return jsonify({"error": "You cannot delete your own account"}), 400
+    if str(user.role).strip().lower() == "admin":
+        return jsonify({"error": "Admin accounts cannot be deleted here"}), 400
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    user.name = "Deleted User"
+    user.email = f"deleted_{user.id}_{timestamp}@deleted.local"
+    user.phone = ""
+    user.address = ""
+    user.avatar = ""
+    user.is_active = False
+    db.session.commit()
+    return jsonify({"message": "Account deleted", "user": user.to_dict()}), 200

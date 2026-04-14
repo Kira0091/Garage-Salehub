@@ -610,6 +610,47 @@ def ensure_reports_comments_tables():
     finally:
         conn.close()
 
+
+def ensure_user_columns():
+    """Migration for user account lifecycle fields."""
+    dialect = db.engine.dialect.name
+
+    if dialect == "mysql":
+        exists = db.session.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'users'
+                  AND COLUMN_NAME = 'is_active'
+                """
+            )
+        ).scalar() or 0
+        if not exists:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN is_active TINYINT(1) DEFAULT 1"))
+            db.session.execute(text("UPDATE users SET is_active = 1 WHERE is_active IS NULL"))
+            db.session.commit()
+        return
+
+    if dialect != "sqlite":
+        return
+
+    db_path = _sqlite_db_path()
+    if not db_path:
+        return
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(users)")
+        cols = {row[1] for row in cur.fetchall()}
+        if "is_active" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1")
+            cur.execute("UPDATE users SET is_active = 1 WHERE is_active IS NULL")
+        conn.commit()
+    finally:
+        conn.close()
+
 with app.app_context():
     try:
         db.create_all()
@@ -619,6 +660,7 @@ with app.app_context():
         ensure_order_crm_columns()
         ensure_voucher_loyalty_tables()
         ensure_reports_comments_tables()
+        ensure_user_columns()
     except OperationalError as exc:
         raise RuntimeError(
             "Database connection failed. Check backend/.env values for "

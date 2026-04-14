@@ -249,6 +249,57 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeactivateUser = async (targetUser) => {
+    const confirmed = await confirmAction({
+      title: "Deactivate this account?",
+      text: `${targetUser.name} will not be able to log in until reactivated.`,
+      confirmText: "Deactivate",
+    });
+    if (!confirmed) return;
+    try {
+      const updated = await adminAPI.deactivateUser(targetUser.id);
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? updated : u)));
+      await alertSuccess("Account deactivated", `${targetUser.name} has been deactivated.`);
+    } catch (error) {
+      await alertError(error.message || "Failed to deactivate account");
+    }
+  };
+
+  const handleActivateUser = async (targetUser) => {
+    const confirmed = await confirmAction({
+      title: "Activate this account?",
+      text: `${targetUser.name} will be able to log in again.`,
+      confirmText: "Activate",
+      confirmButtonColor: "#16a34a",
+    });
+    if (!confirmed) return;
+    try {
+      const updated = await adminAPI.activateUser(targetUser.id);
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? updated : u)));
+      await alertSuccess("Account activated", `${targetUser.name} has been activated.`);
+    } catch (error) {
+      await alertError(error.message || "Failed to activate account");
+    }
+  };
+
+  const handleDeleteUser = async (targetUser) => {
+    const confirmed = await confirmAction({
+      title: "Delete this account?",
+      text: `${targetUser.name} will be anonymized and deactivated. This action cannot be undone.`,
+      confirmText: "Delete account",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmed) return;
+    try {
+      await adminAPI.deleteUser(targetUser.id);
+      const refreshed = await adminAPI.getUsers();
+      setUsers(refreshed);
+      await alertInfo("Account deleted", "The account was deleted and anonymized.");
+    } catch (error) {
+      await alertError(error.message || "Failed to delete account");
+    }
+  };
+
   if (loading) return <div className="loading-center"><div className="spinner" /></div>;
 
   return (
@@ -630,7 +681,7 @@ export default function AdminPage() {
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Name</th><th>Email</th><th>Role</th><th>Items Submitted</th><th>Joined</th><th>Actions</th></tr>
+                  <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Items Submitted</th><th>Joined</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                   {users.map((u) => (
@@ -638,17 +689,48 @@ export default function AdminPage() {
                       <td style={{ fontWeight: 600 }}>{u.name}</td>
                       <td>{u.email}</td>
                       <td><span className={`badge ${u.role === "admin" ? "badge-red" : "badge-blue"}`}>{u.role}</span></td>
+                      <td>
+                        <span className={`badge ${u.is_active === false ? "badge-yellow" : "badge-green"}`}>
+                          {u.is_active === false ? "deactivated" : "active"}
+                        </span>
+                      </td>
                       <td>{u.product_count}</td>
                       <td style={{ fontSize: 12 }}>{new Date(u.created_at).toLocaleDateString("en-PH")}</td>
                       <td>
                         {u.role !== "admin" && (
-                          <button
-                            className="btn btn-sm"
-                            style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}
-                            onClick={() => openMessage(u)}
-                          >
-                            Message
-                          </button>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button
+                              className="btn btn-sm"
+                              style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}
+                              onClick={() => openMessage(u)}
+                            >
+                              Message
+                            </button>
+                            {u.is_active === false ? (
+                              <button
+                                className="btn btn-sm"
+                                style={{ background: "#dcfce7", color: "#166534", border: "1px solid #86efac" }}
+                                onClick={() => handleActivateUser(u)}
+                              >
+                                Activate
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-sm"
+                                style={{ background: "#fef9c3", color: "#854d0e", border: "1px solid #fde68a" }}
+                                onClick={() => handleDeactivateUser(u)}
+                              >
+                                Deactivate
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-sm"
+                              style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca" }}
+                              onClick={() => handleDeleteUser(u)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>

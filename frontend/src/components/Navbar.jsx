@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
-import { loyaltyAPI, notificationsAPI } from "../services/api";
+import { authAPI, loyaltyAPI, notificationsAPI } from "../services/api";
 import { alertError, alertSuccess, confirmAction } from "../utils/alerts";
 import Icon from "./Icon";
 
@@ -19,6 +19,7 @@ export default function Navbar() {
   const displayName = String(user?.name || user?.full_name || user?.username || "User").trim() || "User";
   const firstName = displayName.split(" ")[0] || "User";
   const avatarInitial = displayName.charAt(0).toUpperCase() || "U";
+  const avatarUrl = user?.avatar ? authAPI.avatarUrl(user.avatar) : "";
 
   useEffect(() => {
     const readCount = () => {
@@ -128,7 +129,13 @@ export default function Navbar() {
             ) : (
               <div style={{ position: "relative" }}>
                 <button className="navbar-user-btn" style={styles.userBtn} onClick={() => setUserMenuOpen(!userMenuOpen)}>
-                  <div style={styles.avatar}>{avatarInitial}</div>
+                  <div style={styles.avatar}>
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={displayName} style={styles.avatarImage} />
+                    ) : (
+                      avatarInitial
+                    )}
+                  </div>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{firstName}</span>
                   <span>v</span>
                 </button>
@@ -213,7 +220,8 @@ const styles = {
   searchBtn: { padding: "9px 16px", background: "var(--red)", color: "white", border: "none", borderRadius: "0 var(--radius) var(--radius) 0", cursor: "pointer", fontSize: 14 },
   actions: { display: "flex", alignItems: "center", gap: 10, flexShrink: 0 },
   userBtn: { display: "flex", alignItems: "center", gap: 8, background: "none", border: "1.5px solid var(--gray-200)", borderRadius: "var(--radius)", padding: "6px 12px", cursor: "pointer" },
-  avatar: { width: 28, height: 28, background: "var(--red)", color: "white", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 },
+  avatar: { width: 28, height: 28, background: "var(--red)", color: "white", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, overflow: "hidden" },
+  avatarImage: { width: "100%", height: "100%", objectFit: "cover", display: "block" },
   dropdown: { position: "absolute", right: 0, top: "calc(100% + 8px)", background: "white", border: "1px solid var(--gray-200)", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", minWidth: 200, zIndex: 200, overflow: "hidden" },
   dropdownItem: { display: "block", padding: "10px 16px", fontSize: 14, color: "var(--black)", transition: "background 0.15s" },
   dropdownDivider: { borderTop: "1px solid var(--gray-200)", margin: "4px 0" },

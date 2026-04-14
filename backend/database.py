@@ -13,6 +13,7 @@ class User(db.Model):
     avatar = db.Column(db.String(200), default="")
     address = db.Column(db.String(300), default="")
     phone = db.Column(db.String(30), default="")
+    is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     products = db.relationship("Product", backref="seller", lazy=True)
     orders = db.relationship("Order", backref="buyer", lazy=True)
@@ -37,6 +38,7 @@ class User(db.Model):
             "avatar": self.avatar,
             "address": self.address,
             "phone": self.phone,
+            "is_active": bool(self.is_active),
             "created_at": self.created_at.isoformat(),
             "product_count": len(self.products),
             "rating_avg": round(avg_rating, 2) if avg_rating is not None else None,
