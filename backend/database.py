@@ -24,6 +24,7 @@ class User(db.Model):
     notifications = db.relationship("Notification", backref="user", lazy=True)
     reports = db.relationship("Report", backref="user", lazy=True)
     product_comments = db.relationship("ProductComment", backref="user", lazy=True)
+    addresses = db.relationship("UserAddress", backref="user", lazy=True, cascade="all, delete-orphan")
 
     def to_dict(self):
         rating_count = len(self.reviews_received)
@@ -448,4 +449,42 @@ class LoyaltyLog(db.Model):
             "reason": self.reason,
             "order_id": self.order_id,
             "created_at": self.created_at.isoformat(),
+        }
+
+
+class UserAddress(db.Model):
+    __tablename__ = "user_addresses"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    label = db.Column(db.String(50), default="Address")
+    region_code = db.Column(db.String(20), default="")
+    region_name = db.Column(db.String(120), default="")
+    municipality_code = db.Column(db.String(20), default="")
+    municipality_name = db.Column(db.String(120), default="")
+    barangay_code = db.Column(db.String(20), default="")
+    barangay_name = db.Column(db.String(120), default="")
+    postal_code = db.Column(db.String(20), default="")
+    street_line = db.Column(db.String(250), default="")
+    full_address = db.Column(db.String(500), default="")
+    is_default = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "label": self.label,
+            "region_code": self.region_code,
+            "region_name": self.region_name,
+            "municipality_code": self.municipality_code,
+            "municipality_name": self.municipality_name,
+            "barangay_code": self.barangay_code,
+            "barangay_name": self.barangay_name,
+            "postal_code": self.postal_code,
+            "street_line": self.street_line,
+            "full_address": self.full_address,
+            "is_default": bool(self.is_default),
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
         }

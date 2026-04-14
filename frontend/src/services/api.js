@@ -198,6 +198,16 @@ export const usersAPI = {
     fetch(`${BASE_URL}/users/me/analytics`, withCredentials({ headers: getHeaders() })).then(handleResponse),
   sellerDashboard: () =>
     fetch(`${BASE_URL}/users/seller-dashboard`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  addresses: () =>
+    fetch(`${BASE_URL}/users/addresses`, withCredentials({ headers: getHeaders() })).then(handleResponse),
+  createAddress: (body) =>
+    fetch(`${BASE_URL}/users/addresses`, withCredentials({ method: "POST", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+  updateAddress: (id, body) =>
+    fetch(`${BASE_URL}/users/addresses/${id}`, withCredentials({ method: "PUT", headers: getHeaders(), body: JSON.stringify(body) })).then(handleResponse),
+  useAddress: (id) =>
+    fetch(`${BASE_URL}/users/addresses/${id}/use`, withCredentials({ method: "PUT", headers: getHeaders() })).then(handleResponse),
+  deleteAddress: (id) =>
+    fetch(`${BASE_URL}/users/addresses/${id}`, withCredentials({ method: "DELETE", headers: getHeaders() })).then(handleResponse),
 };
 
 export const vouchersAPI = {

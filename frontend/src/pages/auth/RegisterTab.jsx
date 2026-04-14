@@ -6,6 +6,7 @@ import ConfirmPassword from "./ConfirmPassword";
 import PasswordInput from "./PasswordInput";
 import PhoneNumberInput from "./PhoneNumberInput";
 import TermsModal from "./TermsModal";
+import PhilippineAddressField from "../../components/PhilippineAddressField";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const emptyAvailability = { status: "idle", message: "" };
@@ -189,13 +190,12 @@ export default function RegisterTab({ onGoogleSignIn }) {
             />
           </div>
 
-          <div style={{ gridColumn: isNarrow ? "auto" : "1 / -1" }} className="input-group">
-            <label>Address (optional)</label>
-            <input
-              className="input-field"
-              placeholder="Street, Barangay, City"
+          <div style={{ gridColumn: isNarrow ? "auto" : "1 / -1" }}>
+            <PhilippineAddressField
+              label="Address (Philippines)"
               value={form.address}
-              onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+              onChange={(nextAddress) => setForm((p) => ({ ...p, address: nextAddress }))}
+              hint="Select Region, Municipality/City, Barangay, then enter house/building and street."
             />
           </div>
         </div>

@@ -1,9 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { authAPI, ordersAPI } from "../services/api";
-import { alertError, alertSuccess } from "../utils/alerts";
+import { authAPI, ordersAPI, usersAPI } from "../services/api";
+import { alertError, alertInfo, alertSuccess, confirmAction } from "../utils/alerts";
 import Icon from "../components/Icon";
+import PhilippineAddressField from "../components/PhilippineAddressField";
+
+const EMPTY_ADDRESS = {
+  label: "Home",
+  region_code: "",
+  region_name: "",
+  municipality_code: "",
+  municipality_name: "",
+  barangay_code: "",
+  barangay_name: "",
+  postal_code: "",
+  street_line: "",
+  full_address: "",
+};
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -13,9 +27,16 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
 
+  const [addresses, setAddresses] = useState([]);
+  const [loadingAddresses, setLoadingAddresses] = useState(true);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(null);
+  const [addressDraft, setAddressDraft] = useState(EMPTY_ADDRESS);
+  const [addressFormKey, setAddressFormKey] = useState(0);
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
   const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -24,7 +45,6 @@ export default function ProfilePage() {
     if (!user) return;
     setName(String(user.name || ""));
     setPhone(String(user.phone || ""));
-    setAddress(String(user.address || ""));
     setEmail(String(user.email || ""));
   }, [user]);
 
@@ -34,6 +54,23 @@ export default function ProfilePage() {
       .then(setOrders)
       .catch(() => setOrders([]))
       .finally(() => setLoadingOrders(false));
+  }, [user]);
+
+  const loadAddresses = async () => {
+    try {
+      setLoadingAddresses(true);
+      const data = await usersAPI.addresses();
+      setAddresses(Array.isArray(data) ? data : []);
+    } catch {
+      setAddresses([]);
+    } finally {
+      setLoadingAddresses(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    loadAddresses();
   }, [user]);
 
   const counts = useMemo(() => {
@@ -56,6 +93,84 @@ export default function ProfilePage() {
     );
   }
 
+  const openAddAddress = () => {
+    setEditingAddress(null);
+    setAddressDraft({ ...EMPTY_ADDRESS });
+    setAddressFormKey((k) => k + 1);
+    setAddressModalOpen(true);
+  };
+
+  const openEditAddress = (addr) => {
+    setEditingAddress(addr);
+    setAddressDraft({
+      label: addr.label || "Address",
+      region_code: addr.region_code || "",
+      region_name: addr.region_name || "",
+      municipality_code: addr.municipality_code || "",
+      municipality_name: addr.municipality_name || "",
+      barangay_code: addr.barangay_code || "",
+      barangay_name: addr.barangay_name || "",
+      postal_code: addr.postal_code || "",
+      street_line: addr.street_line || "",
+      full_address: addr.full_address || "",
+    });
+    setAddressFormKey((k) => k + 1);
+    setAddressModalOpen(true);
+  };
+
+  const saveAddress = async () => {
+    if (!addressDraft.full_address || !addressDraft.region_code || !addressDraft.municipality_code || !addressDraft.barangay_code || !addressDraft.street_line) {
+      await alertError("Incomplete address", "Please complete Region, Municipality/City, Barangay and Street.");
+      return;
+    }
+    try {
+      setSavingAddress(true);
+      const payload = { ...addressDraft };
+      if (editingAddress?.id) {
+        await usersAPI.updateAddress(editingAddress.id, payload);
+      } else {
+        await usersAPI.createAddress(payload);
+      }
+      await loadAddresses();
+      await refreshUser();
+      setAddressModalOpen(false);
+      await alertSuccess("Address saved", "Your address book is updated.");
+    } catch (error) {
+      await alertError(error.message || "Unable to save address");
+    } finally {
+      setSavingAddress(false);
+    }
+  };
+
+  const useAddressBook = async (addr) => {
+    try {
+      await usersAPI.useAddress(addr.id);
+      await loadAddresses();
+      await refreshUser();
+      await alertSuccess("Address selected", "This address will be used for checkout.");
+    } catch (error) {
+      await alertError(error.message || "Unable to select address");
+    }
+  };
+
+  const deleteAddress = async (addr) => {
+    const confirmed = await confirmAction({
+      title: "Delete this address?",
+      text: `${addr.label || "Address"} will be removed from your address book.`,
+      confirmText: "Delete",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmed) return;
+    try {
+      await usersAPI.deleteAddress(addr.id);
+      await loadAddresses();
+      await refreshUser();
+      await alertInfo("Address deleted", "Address removed successfully.");
+    } catch (error) {
+      await alertError(error.message || "Unable to delete address");
+    }
+  };
+
   const saveAccountInfo = async () => {
     try {
       setSaving(true);
@@ -64,23 +179,6 @@ export default function ProfilePage() {
       await alertSuccess("Profile updated", "Username and phone number updated.");
     } catch (err) {
       await alertError(err.message || "Unable to update profile");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const useAddress = async () => {
-    if (!address.trim()) {
-      await alertError("Address required", "Please enter your address first.");
-      return;
-    }
-    try {
-      setSaving(true);
-      await authAPI.updateMe({ address });
-      await refreshUser();
-      await alertSuccess("Address set", "This address will be used for checkout.");
-    } catch (err) {
-      await alertError(err.message || "Unable to update address");
     } finally {
       setSaving(false);
     }
@@ -143,7 +241,7 @@ export default function ProfilePage() {
 
   return (
     <div className="page">
-      <div className="container" style={{ maxWidth: 980 }}>
+      <div className="container" style={{ maxWidth: 1080 }}>
         <div className="page-header">
           <h1 className="page-title">My Profile</h1>
           <p className="page-subtitle">{displayName}</p>
@@ -209,23 +307,47 @@ export default function ProfilePage() {
         </div>
 
         <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 14 }}>Address</h3>
-          <div className="input-group" style={{ marginBottom: 12 }}>
-            <label>Add or Edit Address</label>
-            <textarea
-              className="input-field"
-              rows={3}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="House #, Street, Barangay, City, Province"
-            />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <h3 style={{ margin: 0 }}>Address Book</h3>
+            <button className="btn btn-primary btn-sm" onClick={openAddAddress}>+ Add Address</button>
           </div>
-          <button className="btn btn-primary" onClick={useAddress} disabled={saving}>
-            Use This Address
-          </button>
-          <p style={{ marginTop: 8, marginBottom: 0, fontSize: 12, color: "var(--gray-500)" }}>
-            This will automatically reflect in checkout delivery address.
-          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 16 }}>
+            <div>
+              <p style={{ marginTop: 0, fontSize: 13, color: "var(--gray-500)" }}>
+                Save multiple addresses. Use one as default for checkout.
+              </p>
+              <div className="input-group">
+                <label>Current Default Delivery Address</label>
+                <textarea className="input-field" rows={3} value={String(user?.address || "")} readOnly />
+              </div>
+            </div>
+            <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+              {loadingAddresses ? (
+                <div className="loading-center"><div className="spinner" /></div>
+              ) : addresses.length === 0 ? (
+                <div style={{ border: "1px dashed var(--gray-300)", borderRadius: 10, padding: 14, fontSize: 13, color: "var(--gray-500)" }}>
+                  No saved addresses yet.
+                </div>
+              ) : addresses.map((addr) => (
+                <div key={addr.id} style={{ border: "1px solid var(--gray-200)", borderRadius: 10, padding: 12, background: addr.is_default ? "#f0fdf4" : "white" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <strong>{addr.label || "Address"}</strong>
+                    {addr.is_default && <span className="badge badge-green">Default</span>}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--gray-700)", marginBottom: 8 }}>{addr.full_address}</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {!addr.is_default && (
+                      <button className="btn btn-sm btn-outline" onClick={() => useAddressBook(addr)}>Use</button>
+                    )}
+                    <button className="btn btn-sm btn-ghost" onClick={() => openEditAddress(addr)}>Edit</button>
+                    <button className="btn btn-sm" style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca" }} onClick={() => deleteAddress(addr)}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="card" style={{ padding: 18 }}>
@@ -248,6 +370,43 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      {addressModalOpen && (
+        <div className="modal-overlay" onClick={() => setAddressModalOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0 }}>{editingAddress ? "Edit Address" : "Add New Address"}</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setAddressModalOpen(false)}>Close</button>
+            </div>
+            <div className="modal-body">
+              <div className="input-group" style={{ marginBottom: 10 }}>
+                <label>Address Label</label>
+                <input
+                  className="input-field"
+                  value={addressDraft.label}
+                  onChange={(e) => setAddressDraft((p) => ({ ...p, label: e.target.value }))}
+                  placeholder="Home / Work / Other"
+                />
+              </div>
+              <PhilippineAddressField
+                key={addressFormKey}
+                label="Address Template (Philippines)"
+                required
+                initialData={addressDraft}
+                onDataChange={(next) => setAddressDraft((p) => ({ ...p, ...next }))}
+                onChange={(full) => setAddressDraft((p) => ({ ...p, full_address: full }))}
+                hint="Choose Region, Municipality/City, Barangay, then input Building/Street."
+              />
+              <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button className="btn btn-ghost" onClick={() => setAddressModalOpen(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={saveAddress} disabled={savingAddress}>
+                  {savingAddress ? "Saving..." : "Save Address"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

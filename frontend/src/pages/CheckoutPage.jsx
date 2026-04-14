@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { loyaltyAPI, ordersAPI, vouchersAPI } from "../services/api";
+import { loyaltyAPI, ordersAPI, usersAPI, vouchersAPI } from "../services/api";
 import { alertError, alertInfo, alertSuccess, confirmAction } from "../utils/alerts";
 import Icon from "../components/Icon";
+import PhilippineAddressField from "../components/PhilippineAddressField";
 
 const PAYMENT_METHODS = [
   { id: "cod", label: "Cash on Delivery", icon: "cash" },
@@ -32,6 +33,23 @@ export default function CheckoutPage() {
   const [loyaltyPoints, setLoyaltyPoints] = useState(0);
   const [usePoints, setUsePoints] = useState(false);
   const [pointsInput, setPointsInput] = useState(0);
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressFormKey, setAddressFormKey] = useState(0);
+  const [addressDraft, setAddressDraft] = useState({
+    label: "Checkout Address",
+    region_code: "",
+    region_name: "",
+    municipality_code: "",
+    municipality_name: "",
+    barangay_code: "",
+    barangay_name: "",
+    postal_code: "",
+    street_line: "",
+    full_address: "",
+  });
 
   const subtotal = total;
   const voucherDiscount = Math.min(voucherData?.discount || 0, subtotal);
@@ -48,10 +66,76 @@ export default function CheckoutPage() {
     }).catch(() => {});
   }, []);
 
+  const loadAddresses = async () => {
+    try {
+      const data = await usersAPI.addresses();
+      const list = Array.isArray(data) ? data : [];
+      setAddresses(list);
+      const defaultAddress = list.find((item) => item.is_default);
+      if (defaultAddress) {
+        setSelectedAddressId(String(defaultAddress.id));
+        setAddress(defaultAddress.full_address || "");
+      } else if (list[0]) {
+        setSelectedAddressId(String(list[0].id));
+        setAddress(list[0].full_address || "");
+      }
+    } catch {
+      setAddresses([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    loadAddresses();
+  }, [user]);
+
   useEffect(() => {
     if (!user?.address) return;
     setAddress((prev) => (prev && prev.trim() ? prev : user.address));
   }, [user?.address]);
+
+  const handleSelectAddress = (id) => {
+    setSelectedAddressId(id);
+    const found = addresses.find((item) => String(item.id) === String(id));
+    if (found) setAddress(found.full_address || "");
+  };
+
+  const openAddAddressModal = () => {
+    setAddressDraft({
+      label: "Checkout Address",
+      region_code: "",
+      region_name: "",
+      municipality_code: "",
+      municipality_name: "",
+      barangay_code: "",
+      barangay_name: "",
+      postal_code: "",
+      street_line: "",
+      full_address: "",
+    });
+    setAddressFormKey((k) => k + 1);
+    setAddressModalOpen(true);
+  };
+
+  const saveCheckoutAddress = async () => {
+    if (!addressDraft.full_address || !addressDraft.region_code || !addressDraft.municipality_code || !addressDraft.barangay_code || !addressDraft.street_line) {
+      await alertError("Incomplete address", "Please complete the address fields.");
+      return;
+    }
+    try {
+      setSavingAddress(true);
+      const created = await usersAPI.createAddress({ ...addressDraft });
+      await loadAddresses();
+      setSelectedAddressId(String(created.id));
+      setAddress(created.full_address || "");
+      setAddressModalOpen(false);
+      await alertSuccess("Address added", "New address is ready for this checkout.");
+    } catch (error) {
+      await alertError(error.message || "Unable to save address");
+    } finally {
+      setSavingAddress(false);
+    }
+  };
 
   const applyVoucher = async () => {
     const code = voucherCode.trim().toUpperCase();
@@ -160,23 +244,36 @@ export default function CheckoutPage() {
                 </div>
                 <div className="input-group" style={{ marginBottom: 20 }}>
                   <label>Delivery Address *</label>
-                  <textarea
-                    className="input-field"
-                    rows={3}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="House #, Street, Barangay, City, Province"
-                  />
+                  {addresses.length > 0 ? (
+                    <>
+                      <select
+                        className="input-field"
+                        value={selectedAddressId}
+                        onChange={(e) => handleSelectAddress(e.target.value)}
+                        style={{ marginBottom: 8 }}
+                      >
+                        <option value="">Select saved address</option>
+                        {addresses.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label || "Address"}{item.is_default ? " (Default)" : ""} - {item.full_address}
+                          </option>
+                        ))}
+                      </select>
+                      <textarea className="input-field" rows={3} value={address} onChange={(e) => setAddress(e.target.value)} />
+                    </>
+                  ) : (
+                    <textarea
+                      className="input-field"
+                      rows={3}
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="House #, Street, Barangay, City, Province"
+                    />
+                  )}
                 </div>
-                {user?.address && (
-                  <button
-                    className="btn btn-outline"
-                    style={{ width: "100%", marginBottom: 10 }}
-                    onClick={() => setAddress(user.address)}
-                  >
-                    Use My Profile Address
-                  </button>
-                )}
+                <button className="btn btn-outline" style={{ width: "100%", marginBottom: 10 }} onClick={openAddAddressModal}>
+                  + Add New Address
+                </button>
                 <button className="btn btn-primary btn-lg" style={{ width: "100%" }} onClick={async () => { if (!address.trim()) return alertError("Address required", "Missing delivery address"); setStep(2); }}>
                   Continue to Payment
                 </button>
@@ -299,6 +396,42 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      {addressModalOpen && (
+        <div className="modal-overlay" onClick={() => setAddressModalOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0 }}>Add New Address</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setAddressModalOpen(false)}>Close</button>
+            </div>
+            <div className="modal-body">
+              <div className="input-group" style={{ marginBottom: 10 }}>
+                <label>Address Label</label>
+                <input
+                  className="input-field"
+                  value={addressDraft.label}
+                  onChange={(e) => setAddressDraft((p) => ({ ...p, label: e.target.value }))}
+                  placeholder="Home / Work / Other"
+                />
+              </div>
+              <PhilippineAddressField
+                key={addressFormKey}
+                label="Address Template (Philippines)"
+                required
+                initialData={addressDraft}
+                onDataChange={(next) => setAddressDraft((p) => ({ ...p, ...next }))}
+                onChange={(full) => setAddressDraft((p) => ({ ...p, full_address: full }))}
+              />
+              <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button className="btn btn-ghost" onClick={() => setAddressModalOpen(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={saveCheckoutAddress} disabled={savingAddress}>
+                  {savingAddress ? "Saving..." : "Save Address"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
