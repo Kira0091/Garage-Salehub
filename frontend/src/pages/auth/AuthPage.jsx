@@ -16,6 +16,7 @@ export default function AuthPage({ initialTab = "login" }) {
   const [loginForm, setLoginForm] = useState({ identifier: "", password: "" });
   const [otpMode, setOtpMode] = useState(false);
   const [otp, setOtp] = useState({ identifier: "", code: "" });
+  const [registerGooglePrefill, setRegisterGooglePrefill] = useState(null);
 
   useEffect(() => {
     setTab(initialTab === "register" ? "register" : "login");
@@ -55,7 +56,20 @@ export default function AuthPage({ initialTab = "login" }) {
     };
   }, [googleClientId]);
 
-  const handleGoogleSignIn = () => {
+  const decodeGoogleCredential = (credential) => {
+    try {
+      const parts = String(credential || "").split(".");
+      if (parts.length < 2) return null;
+      const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const pad = payload.length % 4 ? "=".repeat(4 - (payload.length % 4)) : "";
+      const json = atob(payload + pad);
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  };
+
+  const handleGoogleSignIn = (mode = "login") => {
     if (!googleClientId) {
       alertError("Google sign-in is not configured. Set VITE_GOOGLE_CLIENT_ID in frontend env.");
       return;
@@ -68,6 +82,19 @@ export default function AuthPage({ initialTab = "login" }) {
       client_id: googleClientId,
       callback: async (response) => {
         try {
+          if (mode === "register") {
+            const payload = decodeGoogleCredential(response.credential);
+            const prefill = {
+              name: String(payload?.name || "").trim(),
+              email: String(payload?.email || "").trim().toLowerCase(),
+            };
+            if (!prefill.email) throw new Error("Google did not return an email.");
+            setRegisterGooglePrefill(prefill);
+            setTab("register");
+            await alertSuccess("Google details loaded", "Please complete the remaining fields, then click Create Account.");
+            return;
+          }
+
           const user = await loginWithGoogle(response.credential);
           await alertSuccess("Login successful", `Welcome, ${user?.name || "User"}!`);
           navigate(String(user?.role || "").toLowerCase() === "admin" ? "/admin" : "/");
@@ -274,13 +301,16 @@ export default function AuthPage({ initialTab = "login" }) {
               )}
 
               <div style={styles.divider}>or</div>
-              <button className="btn btn-ghost btn-lg" type="button" style={{ width: "100%" }} onClick={handleGoogleSignIn}>
+              <button className="btn btn-ghost btn-lg" type="button" style={{ width: "100%" }} onClick={() => handleGoogleSignIn("login")}>
                 <span style={styles.googleMark}>G</span>
                 Continue with Google
               </button>
             </>
           ) : (
-            <RegisterTab onGoogleSignIn={handleGoogleSignIn} />
+            <RegisterTab
+              onGoogleSignIn={() => handleGoogleSignIn("register")}
+              googlePrefill={registerGooglePrefill}
+            />
           )}
         </div>
       </div>

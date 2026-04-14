@@ -24,7 +24,7 @@ const getPasswordStrength = (value) => {
   return { score, label: "Strong", color: "#16a34a" };
 };
 
-export default function RegisterTab({ onGoogleSignIn }) {
+export default function RegisterTab({ onGoogleSignIn, googlePrefill }) {
   const navigate = useNavigate();
   const { register } = useAuth();
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 980 : false));
@@ -54,6 +54,16 @@ export default function RegisterTab({ onGoogleSignIn }) {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  useEffect(() => {
+    if (!googlePrefill) return;
+    setForm((prev) => ({
+      ...prev,
+      name: googlePrefill.name || prev.name,
+      email: googlePrefill.email || prev.email,
+    }));
+    setTouched((prev) => ({ ...prev, email: true }));
+  }, [googlePrefill]);
 
   const checkEmailAvailability = useCallback(async (email) => {
     await new Promise((r) => setTimeout(r, 350));
