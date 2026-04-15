@@ -8,6 +8,21 @@ import Icon from "../components/Icon";
 
 const TABS = ["Dashboard", "Pending Verifications", "All Products", "Vouchers", "Orders", "Users", "Messages", "Reports"];
 
+const ADMIN_ORDER_STATUS_OPTIONS = [
+  { value: "pending", label: "To Pay" },
+  { value: "processing", label: "To Shipped" },
+  { value: "shipped", label: "To Received" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const ADMIN_STATUS_LABEL = {
+  pending: "to pay",
+  processing: "to shipped",
+  shipped: "to received",
+  delivered: "completed (buyer confirmed)",
+  cancelled: "cancelled",
+};
+
 export default function AdminPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -76,6 +91,14 @@ export default function AdminPage() {
     if (tab === "Reports") {
       reportsAPI.mine().then(setReports).catch(() => setReports([]));
     }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "Orders") return undefined;
+    const timer = setInterval(() => {
+      adminAPI.getAllOrders().then(setAllOrders).catch(() => {});
+    }, 5000);
+    return () => clearInterval(timer);
   }, [tab]);
 
   const handleApprove = async (product) => {
@@ -206,6 +229,16 @@ export default function AdminPage() {
     }
   };
 
+  const activateVoucher = async (id) => {
+    try {
+      const updated = await vouchersAPI.activate(id);
+      setVouchers((prev) => prev.map((voucher) => (voucher.id === id ? updated : voucher)));
+      setVoucherMessage("Voucher activated.");
+    } catch (e) {
+      setVoucherMessage(e.message || "Failed to activate voucher.");
+    }
+  };
+
   const updateReportStatus = async (reportId, status) => {
     try {
       const updated = await reportsAPI.updateStatus(reportId, { status });
@@ -213,6 +246,57 @@ export default function AdminPage() {
       await alertSuccess("Report updated", `Status set to ${status}.`);
     } catch (error) {
       await alertError(error.message || "Failed to update report status");
+    }
+  };
+
+  const handleDeactivateUser = async (targetUser) => {
+    const confirmed = await confirmAction({
+      title: "Deactivate this account?",
+      text: `${targetUser.name} will not be able to log in until reactivated.`,
+      confirmText: "Deactivate",
+    });
+    if (!confirmed) return;
+    try {
+      const updated = await adminAPI.deactivateUser(targetUser.id);
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? updated : u)));
+      await alertSuccess("Account deactivated", `${targetUser.name} has been deactivated.`);
+    } catch (error) {
+      await alertError(error.message || "Failed to deactivate account");
+    }
+  };
+
+  const handleActivateUser = async (targetUser) => {
+    const confirmed = await confirmAction({
+      title: "Activate this account?",
+      text: `${targetUser.name} will be able to log in again.`,
+      confirmText: "Activate",
+      confirmButtonColor: "#16a34a",
+    });
+    if (!confirmed) return;
+    try {
+      const updated = await adminAPI.activateUser(targetUser.id);
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? updated : u)));
+      await alertSuccess("Account activated", `${targetUser.name} has been activated.`);
+    } catch (error) {
+      await alertError(error.message || "Failed to activate account");
+    }
+  };
+
+  const handleDeleteUser = async (targetUser) => {
+    const confirmed = await confirmAction({
+      title: "Delete this account?",
+      text: `${targetUser.name} will be anonymized and deactivated. This action cannot be undone.`,
+      confirmText: "Delete account",
+      confirmButtonColor: "#dc2626",
+    });
+    if (!confirmed) return;
+    try {
+      await adminAPI.deleteUser(targetUser.id);
+      const refreshed = await adminAPI.getUsers();
+      setUsers(refreshed);
+      await alertInfo("Account deleted", "The account was deleted and anonymized.");
+    } catch (error) {
+      await alertError(error.message || "Failed to delete account");
     }
   };
 
@@ -419,19 +503,23 @@ export default function AdminPage() {
                       <td>{o.buyer.name}</td>
                       <td style={{ fontWeight: 700 }}>PHP {o.total_amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
                       <td><span className={`badge ${o.payment_status === "paid" ? "badge-green" : "badge-yellow"}`}>{o.payment_status}</span></td>
-                      <td><span className="badge badge-blue">{o.status}</span></td>
+                      <td><span className={`badge ${o.status === "delivered" ? "badge-green" : "badge-blue"}`}>{ADMIN_STATUS_LABEL[o.status] || o.status}</span></td>
                       <td style={{ fontSize: 12 }}>{new Date(o.created_at).toLocaleDateString("en-PH")}</td>
                       <td>
-                        <select
-                          className="input-field"
-                          style={{ padding: "4px 8px", fontSize: 12 }}
-                          value={o.status}
-                          onChange={(e) => handleOrderStatus(o.id, e.target.value)}
-                        >
-                          {["pending", "processing", "shipped", "delivered", "cancelled"].map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
+                        {o.status === "delivered" ? (
+                          <span className="badge badge-green">Completed by buyer</span>
+                        ) : (
+                          <select
+                            className="input-field"
+                            style={{ padding: "4px 8px", fontSize: 12 }}
+                            value={o.status}
+                            onChange={(e) => handleOrderStatus(o.id, e.target.value)}
+                          >
+                            {ADMIN_ORDER_STATUS_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -566,9 +654,15 @@ export default function AdminPage() {
                           <td>{voucher.expires_at ? new Date(voucher.expires_at).toLocaleDateString("en-PH") : "-"}</td>
                           <td><span className={`badge ${voucher.status === "active" ? "badge-green" : voucher.status === "expired" ? "badge-yellow" : "badge-red"}`}>{voucher.status}</span></td>
                           <td>
-                            <button className="btn btn-sm" style={{ background: "#fee2e2", color: "var(--red)", border: "none" }} onClick={() => deactivateVoucher(voucher.id)}>
-                              Deactivate
-                            </button>
+                            {voucher.is_active ? (
+                              <button className="btn btn-sm" style={{ background: "#fee2e2", color: "var(--red)", border: "none" }} onClick={() => deactivateVoucher(voucher.id)}>
+                                Deactivate
+                              </button>
+                            ) : (
+                              <button className="btn btn-sm" style={{ background: "#dcfce7", color: "#166534", border: "none" }} onClick={() => activateVoucher(voucher.id)}>
+                                Activate
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -587,7 +681,7 @@ export default function AdminPage() {
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Name</th><th>Email</th><th>Role</th><th>Items Submitted</th><th>Joined</th><th>Actions</th></tr>
+                  <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Items Submitted</th><th>Joined</th><th>Actions</th></tr>
                 </thead>
                 <tbody>
                   {users.map((u) => (
@@ -595,17 +689,48 @@ export default function AdminPage() {
                       <td style={{ fontWeight: 600 }}>{u.name}</td>
                       <td>{u.email}</td>
                       <td><span className={`badge ${u.role === "admin" ? "badge-red" : "badge-blue"}`}>{u.role}</span></td>
+                      <td>
+                        <span className={`badge ${u.is_active === false ? "badge-yellow" : "badge-green"}`}>
+                          {u.is_active === false ? "deactivated" : "active"}
+                        </span>
+                      </td>
                       <td>{u.product_count}</td>
                       <td style={{ fontSize: 12 }}>{new Date(u.created_at).toLocaleDateString("en-PH")}</td>
                       <td>
                         {u.role !== "admin" && (
-                          <button
-                            className="btn btn-sm"
-                            style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}
-                            onClick={() => openMessage(u)}
-                          >
-                            Message
-                          </button>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button
+                              className="btn btn-sm"
+                              style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}
+                              onClick={() => openMessage(u)}
+                            >
+                              Message
+                            </button>
+                            {u.is_active === false ? (
+                              <button
+                                className="btn btn-sm"
+                                style={{ background: "#dcfce7", color: "#166534", border: "1px solid #86efac" }}
+                                onClick={() => handleActivateUser(u)}
+                              >
+                                Activate
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-sm"
+                                style={{ background: "#fef9c3", color: "#854d0e", border: "1px solid #fde68a" }}
+                                onClick={() => handleDeactivateUser(u)}
+                              >
+                                Deactivate
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-sm"
+                              style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca" }}
+                              onClick={() => handleDeleteUser(u)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>

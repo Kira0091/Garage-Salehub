@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
-import { loyaltyAPI, notificationsAPI } from "../services/api";
+import { authAPI, loyaltyAPI, notificationsAPI } from "../services/api";
 import { alertError, alertSuccess, confirmAction } from "../utils/alerts";
 import Icon from "./Icon";
 
@@ -19,6 +19,7 @@ export default function Navbar() {
   const displayName = String(user?.name || user?.full_name || user?.username || "User").trim() || "User";
   const firstName = displayName.split(" ")[0] || "User";
   const avatarInitial = displayName.charAt(0).toUpperCase() || "U";
+  const avatarUrl = user?.avatar ? authAPI.avatarUrl(user.avatar) : "";
 
   useEffect(() => {
     const readCount = () => {
@@ -85,6 +86,14 @@ export default function Navbar() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/");
+  };
+
   return (
     <header style={styles.header}>
       <div style={styles.mainNav}>
@@ -107,6 +116,11 @@ export default function Navbar() {
           )}
 
           <div style={styles.actions}>
+            {isAuthRoute && (
+              <button type="button" style={styles.navBackBtn} onClick={handleBack}>
+                ← Back
+              </button>
+            )}
             {!user ? (
               <>
                 {!isAuthRoute && <Link to="/login" className="btn btn-ghost btn-sm">Login</Link>}
@@ -115,7 +129,13 @@ export default function Navbar() {
             ) : (
               <div style={{ position: "relative" }}>
                 <button className="navbar-user-btn" style={styles.userBtn} onClick={() => setUserMenuOpen(!userMenuOpen)}>
-                  <div style={styles.avatar}>{avatarInitial}</div>
+                  <div style={styles.avatar}>
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={displayName} style={styles.avatarImage} />
+                    ) : (
+                      avatarInitial
+                    )}
+                  </div>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{firstName}</span>
                   <span>v</span>
                 </button>
@@ -126,7 +146,6 @@ export default function Navbar() {
                         <Link className="navbar-dropdown-item" to="/profile" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Profile</Link>
                         <Link className="navbar-dropdown-item" to="/my-products" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Submissions</Link>
                         <Link className="navbar-dropdown-item" to="/seller-dashboard" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Seller Dashboard</Link>
-                        <Link className="navbar-dropdown-item" to="/dashboard" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Dashboard</Link>
                         <Link className="navbar-dropdown-item" to="/report-problem" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>Report a Problem</Link>
                         <Link className="navbar-dropdown-item" to="/orders" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Orders</Link>
                         <Link className="navbar-dropdown-item" to="/loyalty" style={styles.dropdownItem} onClick={() => setUserMenuOpen(false)}>My Points ({points})</Link>
@@ -201,7 +220,8 @@ const styles = {
   searchBtn: { padding: "9px 16px", background: "var(--red)", color: "white", border: "none", borderRadius: "0 var(--radius) var(--radius) 0", cursor: "pointer", fontSize: 14 },
   actions: { display: "flex", alignItems: "center", gap: 10, flexShrink: 0 },
   userBtn: { display: "flex", alignItems: "center", gap: 8, background: "none", border: "1.5px solid var(--gray-200)", borderRadius: "var(--radius)", padding: "6px 12px", cursor: "pointer" },
-  avatar: { width: 28, height: 28, background: "var(--red)", color: "white", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 },
+  avatar: { width: 28, height: 28, background: "var(--red)", color: "white", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, overflow: "hidden" },
+  avatarImage: { width: "100%", height: "100%", objectFit: "cover", display: "block" },
   dropdown: { position: "absolute", right: 0, top: "calc(100% + 8px)", background: "white", border: "1px solid var(--gray-200)", borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)", minWidth: 200, zIndex: 200, overflow: "hidden" },
   dropdownItem: { display: "block", padding: "10px 16px", fontSize: 14, color: "var(--black)", transition: "background 0.15s" },
   dropdownDivider: { borderTop: "1px solid var(--gray-200)", margin: "4px 0" },
@@ -211,4 +231,14 @@ const styles = {
   navLinks: { background: "var(--black)", padding: "0" },
   navLinksInner: { display: "flex", alignItems: "center", gap: 4 },
   navLink: { color: "rgba(255,255,255,0.85)", padding: "11px 16px", fontSize: 14, fontWeight: 500, display: "block", transition: "color 0.15s", textDecoration: "none" },
+  navBackBtn: {
+    fontSize: 14,
+    padding: "6px 10px",
+    border: "1px solid var(--red)",
+    borderRadius: "var(--radius)",
+    background: "var(--red)",
+    color: "white",
+    cursor: "pointer",
+    lineHeight: 1.2,
+  },
 };

@@ -168,7 +168,7 @@ export default function MyProductsPage() {
                         <td style={{ fontSize: 12, color: "var(--gray-500)" }}>{new Date(p.created_at).toLocaleDateString("en-PH")}</td>
                         <td>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <Link to={`/product/${p.id}`} className="btn btn-ghost btn-sm">View</Link>
+                            <Link to={`/product/${p.id}?from=submissions`} className="btn btn-ghost btn-sm">View</Link>
                             {(displayStatus === "pending_verification" || displayStatus === "pending") && (
                               <button className="btn btn-sm" style={{ background: "#fee2e2", color: "var(--red)", border: "none" }} onClick={() => handleDelete(p.id)}>Delete</button>
                             )}

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { alertError, alertSuccess } from "../../utils/alerts";
 import ConfirmPassword from "./ConfirmPassword";
-import EmailVerification from "./EmailVerification";
 import PasswordInput from "./PasswordInput";
 import PhoneNumberInput from "./PhoneNumberInput";
 import TermsModal from "./TermsModal";
+import PhilippineAddressField from "../../components/PhilippineAddressField";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const emptyAvailability = { status: "idle", message: "" };
@@ -23,14 +24,13 @@ const getPasswordStrength = (value) => {
   return { score, label: "Strong", color: "#16a34a" };
 };
 
-export default function RegisterTab({ onGoogleSignIn }) {
+export default function RegisterTab({ onGoogleSignIn, googlePrefill }) {
   const navigate = useNavigate();
+  const { register } = useAuth();
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 980 : false));
   const [loading, setLoading] = useState(false);
   const [openTerms, setOpenTerms] = useState(false);
   const [termsUnlocked, setTermsUnlocked] = useState(false);
-  const [awaitingVerify, setAwaitingVerify] = useState(false);
-  const [verificationToken, setVerificationToken] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -55,21 +55,23 @@ export default function RegisterTab({ onGoogleSignIn }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  useEffect(() => {
+    if (!googlePrefill) return;
+    setForm((prev) => ({
+      ...prev,
+      name: googlePrefill.name || prev.name,
+      email: googlePrefill.email || prev.email,
+    }));
+    setTouched((prev) => ({ ...prev, email: true }));
+  }, [googlePrefill]);
+
   const checkEmailAvailability = useCallback(async (email) => {
-    // TODO: Implement backend endpoint
-    // GET /api/check/email?value=<email>
-    // response: { available: boolean }
     await new Promise((r) => setTimeout(r, 350));
-    if (String(email).toLowerCase().includes("taken")) return { available: false };
     return { available: true };
   }, []);
 
   const checkMobileAvailability = useCallback(async (mobile) => {
-    // TODO: Implement backend endpoint
-    // GET /api/check/mobile?value=<full_mobile_number>
-    // response: { available: boolean }
     await new Promise((r) => setTimeout(r, 350));
-    if (String(mobile).endsWith("0000")) return { available: false };
     return { available: true };
   }, []);
 
@@ -119,23 +121,6 @@ export default function RegisterTab({ onGoogleSignIn }) {
     return () => clearTimeout(t);
   }, [checkMobileAvailability, form.mobile.fullNumber, form.mobile.nationalNumber.length]);
 
-  const createUnverifiedAccount = async () => {
-    // TODO: Implement backend endpoint
-    // POST /api/auth/register-unverified
-    // body: { name, email, password, mobile, address }
-    // returns: { verification_token }
-    await new Promise((r) => setTimeout(r, 600));
-    return { verification_token: "verify-token-demo-001" };
-  };
-
-  const sendEmailVerificationCode = async (token) => {
-    // TODO: Implement backend endpoint
-    // POST /api/auth/verification/send
-    // body: { verification_token: token }
-    await new Promise((r) => setTimeout(r, 450));
-    return { sent: true };
-  };
-
   const submitRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -146,28 +131,22 @@ export default function RegisterTab({ onGoogleSignIn }) {
       if (emailAvailability.status === "taken") throw new Error("Email is already registered.");
       if (mobileAvailability.status === "taken") throw new Error("Mobile is already registered.");
 
-      const out = await createUnverifiedAccount();
-      await sendEmailVerificationCode(out.verification_token);
-      setVerificationToken(out.verification_token);
-      setAwaitingVerify(true);
-      await alertSuccess("Account created", "Enter the 6-digit code sent to your email.");
+      const user = await register({
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        phone: form.mobile.fullNumber,
+        address: form.address.trim(),
+      });
+
+      await alertSuccess("Account created", `Welcome, ${user?.name || "User"}!`);
+      navigate(String(user?.role || "").toLowerCase() === "admin" ? "/admin" : "/");
     } catch (err) {
       await alertError(err.message || "Registration failed");
     } finally {
       setLoading(false);
     }
   };
-
-  if (awaitingVerify) {
-    return (
-      <EmailVerification
-        email={form.email}
-        verificationToken={verificationToken}
-        onBack={() => setAwaitingVerify(false)}
-        onVerified={() => navigate("/login")}
-      />
-    );
-  }
 
   return (
     <>
@@ -221,13 +200,12 @@ export default function RegisterTab({ onGoogleSignIn }) {
             />
           </div>
 
-          <div style={{ gridColumn: isNarrow ? "auto" : "1 / -1" }} className="input-group">
-            <label>Address (optional)</label>
-            <input
-              className="input-field"
-              placeholder="Street, Barangay, City"
+          <div style={{ gridColumn: isNarrow ? "auto" : "1 / -1" }}>
+            <PhilippineAddressField
+              label="Address (Philippines)"
               value={form.address}
-              onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+              onChange={(nextAddress) => setForm((p) => ({ ...p, address: nextAddress }))}
+              hint="Select Region, Municipality/City, Barangay, then enter house/building and street."
             />
           </div>
         </div>
@@ -331,4 +309,3 @@ const styles = {
     marginRight: 6,
   },
 };
-

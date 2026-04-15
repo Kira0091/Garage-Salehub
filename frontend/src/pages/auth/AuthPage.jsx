@@ -7,7 +7,7 @@ import RegisterTab from "./RegisterTab";
 
 export default function AuthPage({ initialTab = "login" }) {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [tab, setTab] = useState(initialTab === "register" ? "register" : "login");
   const [loading, setLoading] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -16,6 +16,7 @@ export default function AuthPage({ initialTab = "login" }) {
   const [loginForm, setLoginForm] = useState({ identifier: "", password: "" });
   const [otpMode, setOtpMode] = useState(false);
   const [otp, setOtp] = useState({ identifier: "", code: "" });
+  const [registerGooglePrefill, setRegisterGooglePrefill] = useState(null);
 
   useEffect(() => {
     setTab(initialTab === "register" ? "register" : "login");
@@ -35,12 +36,74 @@ export default function AuthPage({ initialTab = "login" }) {
     return () => clearTimeout(t);
   }, [otpCountdown]);
 
-  const loginWithGoogle = async () => {
-    try {
-      await alertSuccess("Google sign-in", "Connect /api/auth/google when backend is ready.");
-    } catch (e) {
-      await alertError(e.message || "Google sign-in failed");
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const [googleReady, setGoogleReady] = useState(false);
+
+  useEffect(() => {
+    if (!googleClientId) return;
+    if (window.google?.accounts?.id) {
+      setGoogleReady(true);
+      return;
     }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setGoogleReady(true);
+    document.body.appendChild(script);
+    return () => {
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
+  }, [googleClientId]);
+
+  const decodeGoogleCredential = (credential) => {
+    try {
+      const parts = String(credential || "").split(".");
+      if (parts.length < 2) return null;
+      const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const pad = payload.length % 4 ? "=".repeat(4 - (payload.length % 4)) : "";
+      const json = atob(payload + pad);
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  };
+
+  const handleGoogleSignIn = (mode = "login") => {
+    if (!googleClientId) {
+      alertError("Google sign-in is not configured. Set VITE_GOOGLE_CLIENT_ID in frontend env.");
+      return;
+    }
+    if (!googleReady || !window.google?.accounts?.id) {
+      alertError("Google sign-in is still loading. Please try again.");
+      return;
+    }
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: async (response) => {
+        try {
+          if (mode === "register") {
+            const payload = decodeGoogleCredential(response.credential);
+            const prefill = {
+              name: String(payload?.name || "").trim(),
+              email: String(payload?.email || "").trim().toLowerCase(),
+            };
+            if (!prefill.email) throw new Error("Google did not return an email.");
+            setRegisterGooglePrefill(prefill);
+            setTab("register");
+            await alertSuccess("Google details loaded", "Please complete the remaining fields, then click Create Account.");
+            return;
+          }
+
+          const user = await loginWithGoogle(response.credential);
+          await alertSuccess("Login successful", `Welcome, ${user?.name || "User"}!`);
+          navigate(String(user?.role || "").toLowerCase() === "admin" ? "/admin" : "/");
+        } catch (error) {
+          await alertError(error.message || "Google sign-in failed");
+        }
+      },
+    });
+    window.google.accounts.id.prompt();
   };
 
   const requestOtp = async (identifier) => {
@@ -238,13 +301,16 @@ export default function AuthPage({ initialTab = "login" }) {
               )}
 
               <div style={styles.divider}>or</div>
-              <button className="btn btn-ghost btn-lg" type="button" style={{ width: "100%" }} onClick={loginWithGoogle}>
+              <button className="btn btn-ghost btn-lg" type="button" style={{ width: "100%" }} onClick={() => handleGoogleSignIn("login")}>
                 <span style={styles.googleMark}>G</span>
                 Continue with Google
               </button>
             </>
           ) : (
-            <RegisterTab onGoogleSignIn={loginWithGoogle} />
+            <RegisterTab
+              onGoogleSignIn={() => handleGoogleSignIn("register")}
+              googlePrefill={registerGooglePrefill}
+            />
           )}
         </div>
       </div>
@@ -272,6 +338,7 @@ const styles = {
   card: {
     width: "100%",
     maxWidth: 980,
+    margin: "0 auto",
     background: "white",
     borderRadius: "var(--radius-lg)",
     boxShadow: "var(--shadow-lg)",

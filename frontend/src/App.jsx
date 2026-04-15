@@ -16,6 +16,7 @@ const SellPage = lazy(() => import("./pages/SellPage"));
 const MyProductsPage = lazy(() => import("./pages/MyProductsPage"));
 const ProductEditPage = lazy(() => import("./pages/ProductEditPage"));
 const OrdersPage = lazy(() => import("./pages/OrdersPage"));
+const OrderDetailsPage = lazy(() => import("./pages/OrderDetailsPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const AdminPage = lazy(() => import("./pages/AdminPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
@@ -106,7 +107,7 @@ function AppRoutes() {
       <Suspense fallback={<div className="loading-center"><div className="spinner" /></div>}>
         <Routes>
           <Route path="/" element={<HomeEntry />} />
-          <Route path="/dashboard" element={<ProtectedRoute><SellerDashboardPage /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<Navigate to="/seller-dashboard" replace />} />
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/cart" element={<CartPage />} />
@@ -118,6 +119,7 @@ function AppRoutes() {
           <Route path="/my-products" element={<ProtectedRoute><MyProductsPage /></ProtectedRoute>} />
           <Route path="/my-products/:id/edit" element={<ProtectedRoute><ProductEditPage /></ProtectedRoute>} />
           <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
+          <Route path="/orders/:id" element={<ProtectedRoute><OrderDetailsPage /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/wishlist" element={<ProtectedRoute><WishlistPage /></ProtectedRoute>} />

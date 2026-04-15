@@ -610,6 +610,118 @@ def ensure_reports_comments_tables():
     finally:
         conn.close()
 
+
+def ensure_user_columns():
+    """Migration for user account lifecycle fields."""
+    dialect = db.engine.dialect.name
+
+    if dialect == "mysql":
+        exists = db.session.execute(
+            text(
+                """
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'users'
+                  AND COLUMN_NAME = 'is_active'
+                """
+            )
+        ).scalar() or 0
+        if not exists:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN is_active TINYINT(1) DEFAULT 1"))
+            db.session.execute(text("UPDATE users SET is_active = 1 WHERE is_active IS NULL"))
+            db.session.commit()
+        return
+
+    if dialect != "sqlite":
+        return
+
+    db_path = _sqlite_db_path()
+    if not db_path:
+        return
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(users)")
+        cols = {row[1] for row in cur.fetchall()}
+        if "is_active" not in cols:
+            cur.execute("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1")
+            cur.execute("UPDATE users SET is_active = 1 WHERE is_active IS NULL")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def ensure_user_addresses_table():
+    """Create user address book table if missing."""
+    dialect = db.engine.dialect.name
+
+    if dialect == "mysql":
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS user_addresses (
+                    id INT NOT NULL AUTO_INCREMENT,
+                    user_id INT NOT NULL,
+                    label VARCHAR(50) DEFAULT 'Address',
+                    region_code VARCHAR(20) DEFAULT '',
+                    region_name VARCHAR(120) DEFAULT '',
+                    municipality_code VARCHAR(20) DEFAULT '',
+                    municipality_name VARCHAR(120) DEFAULT '',
+                    barangay_code VARCHAR(20) DEFAULT '',
+                    barangay_name VARCHAR(120) DEFAULT '',
+                    postal_code VARCHAR(20) DEFAULT '',
+                    street_line VARCHAR(250) DEFAULT '',
+                    full_address VARCHAR(500) DEFAULT '',
+                    is_default TINYINT(1) DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (id),
+                    INDEX ix_user_addresses_user_id (user_id),
+                    CONSTRAINT fk_user_addresses_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                """
+            )
+        )
+        db.session.commit()
+        return
+
+    if dialect != "sqlite":
+        return
+
+    db_path = _sqlite_db_path()
+    if not db_path:
+        return
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_addresses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                label TEXT DEFAULT 'Address',
+                region_code TEXT DEFAULT '',
+                region_name TEXT DEFAULT '',
+                municipality_code TEXT DEFAULT '',
+                municipality_name TEXT DEFAULT '',
+                barangay_code TEXT DEFAULT '',
+                barangay_name TEXT DEFAULT '',
+                postal_code TEXT DEFAULT '',
+                street_line TEXT DEFAULT '',
+                full_address TEXT DEFAULT '',
+                is_default INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
 with app.app_context():
     try:
         db.create_all()
@@ -619,6 +731,8 @@ with app.app_context():
         ensure_order_crm_columns()
         ensure_voucher_loyalty_tables()
         ensure_reports_comments_tables()
+        ensure_user_columns()
+        ensure_user_addresses_table()
     except OperationalError as exc:
         raise RuntimeError(
             "Database connection failed. Check backend/.env values for "
